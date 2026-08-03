@@ -1708,6 +1708,7 @@ SELECT
   )) AS span_fragments
 FROM spans AS s
 JOIN spans AS m ON m.dynamic_span_id = s.dynamic_span_id
+               AND m.run_id = s.run_id
 WHERE m.name = ?
   AND m.run_id IN (/*SLICE:run_ids*/?)
 GROUP BY s.run_id, s.trace_id, s.dynamic_span_id, s.parent_span_id
