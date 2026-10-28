@@ -11,15 +11,20 @@
 # Run `aws sso login --profile <profile>` first if the session has expired.
 #
 # Refuses to run anywhere except a clean checkout of origin/main, so a
-# pushed image always traces back to a reviewed, merged commit.
+# pushed image always traces back to a reviewed, merged commit. --allow-non-main
+# (stage only) skips that check for a one-off test push before merge; tags
+# such a build as "test-<branch>-<sha>" so it can never be mistaken for a
+# main-based release artifact.
 set -euo pipefail
 
 region="us-east-1"
 environment=""
+allow_non_main=false
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --environment) environment="${2:-}"; shift 2 ;;
+    --allow-non-main) allow_non_main=true; shift ;;
     -h|--help)
       sed -n '2,15p' "$0"
       exit 0
@@ -34,28 +39,40 @@ case "$environment" in
   *) echo "ERROR: --environment must be 'stage' or 'prod'" >&2; exit 1 ;;
 esac
 
+if [ "$allow_non_main" = true ] && [ "$environment" != "stage" ]; then
+  echo "ERROR: --allow-non-main is only permitted for --environment stage" >&2
+  exit 1
+fi
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir/.."
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-[ "$branch" = "main" ] || {
-  echo "ERROR: must be run from 'main', not '${branch}'" >&2
-  exit 1
-}
+tag="main-$(git rev-parse --short=12 HEAD)"
 
-[ -z "$(git status --porcelain)" ] || {
-  echo "ERROR: working tree has uncommitted changes" >&2
-  exit 1
-}
+if [ "$allow_non_main" = true ]; then
+  echo "WARNING: --allow-non-main set, skipping the main-branch check (stage test push only)." >&2
+  tag="test-${branch//\//-}-$(git rev-parse --short=12 HEAD)"
+else
+  [ "$branch" = "main" ] || {
+    echo "ERROR: must be run from 'main', not '${branch}' (pass --allow-non-main for a stage test push)" >&2
+    exit 1
+  }
 
-git fetch origin main --quiet
-local_head="$(git rev-parse HEAD)"
-remote_head="$(git rev-parse origin/main)"
-[ "$local_head" = "$remote_head" ] || {
-  echo "ERROR: local main (${local_head}) does not match origin/main (${remote_head})" >&2
-  echo "Run 'git pull' first." >&2
-  exit 1
-}
+  [ -z "$(git status --porcelain)" ] || {
+    echo "ERROR: working tree has uncommitted changes" >&2
+    exit 1
+  }
+
+  git fetch origin main --quiet
+  local_head="$(git rev-parse HEAD)"
+  remote_head="$(git rev-parse origin/main)"
+  [ "$local_head" = "$remote_head" ] || {
+    echo "ERROR: local main (${local_head}) does not match origin/main (${remote_head})" >&2
+    echo "Run 'git pull' first." >&2
+    exit 1
+  }
+fi
 
 [ "${AWS_PROFILE:-}" = "$profile" ] || {
   echo "ERROR: AWS_PROFILE must be '${profile}' for --environment ${environment} (got '${AWS_PROFILE:-unset}')" >&2
@@ -69,7 +86,6 @@ caller_account="$(aws sts get-caller-identity --query Account --output text)"
 }
 
 registry="${account_id}.dkr.ecr.${region}.amazonaws.com"
-tag="main-$(git rev-parse --short=12 HEAD)"
 image_ref="${registry}/privy/inngest:${tag}"
 
 echo "Building and pushing ${image_ref} ..."
