@@ -9,6 +9,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOFLAGS=-mod=vendor GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /go/bin/inngest cmd/main.go
 
 FROM alpine:3.24 AS inngest
-RUN apk add --no-cache ca-certificates tzdata && update-ca-certificates
+RUN apk add --no-cache ca-certificates tzdata curl jq && update-ca-certificates
 COPY --from=build /go/bin/inngest /bin/inngest
+COPY --chmod=0555 scripts/awcp-bootstrap.sh /bin/awcp-bootstrap
 CMD ["inngest"]
