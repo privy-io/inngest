@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { Button as NewButton } from '@inngest/components/Button';
 import { Button } from '@inngest/components/Button/Button';
 import { RiArrowRightSLine } from '@remixicon/react';
 
-import { AITrace } from '../AI/AITrace';
-import { parseAIOutput } from '../AI/utils';
 import {
   CodeElement,
   ElementWrapper,
@@ -13,7 +11,7 @@ import {
   TimeElement,
 } from '../DetailsCard/Element';
 import { RerunModal as NewRerunModal, RerunModal } from '../Rerun/RerunModal';
-import { ScoresAttrs } from '../RunDetails/ScoresAttrs';
+import { ScoresAttrs, isScoreKind } from '../RunDetails/ScoresAttrs';
 import { useShared } from '../SharedContext/SharedContext';
 import { useBooleanFlag } from '../SharedContext/useBooleanFlag';
 import { useGetTraceResult } from '../SharedContext/useGetTraceResult';
@@ -26,6 +24,7 @@ import { IO } from './IO';
 import { MetadataAttrs } from './MetadataAttrs';
 import { Tabs } from './Tabs';
 import { UserlandAttrs } from './UserlandAttrs';
+import { canonicalMetadataKind } from './metadataKind';
 import {
   isStepInfoInvoke,
   isStepInfoSignal,
@@ -130,13 +129,11 @@ const getStepKindInfo = (props: StepKindInfoProps): JSX.Element | null =>
 export const StepInfo = ({
   selectedStep,
   pollInterval: initialPollInterval,
-  tracesPreviewEnabled,
   debug = false,
   newStack = false,
 }: {
   selectedStep: StepInfoType;
   pollInterval?: number;
-  tracesPreviewEnabled?: boolean;
   debug?: boolean;
   newStack?: boolean;
 }) => {
@@ -148,13 +145,15 @@ export const StepInfo = ({
   const { loading, data: result } = useGetTraceResult({
     traceID: trace.outputID,
     refetchInterval: pollInterval ? pollInterval : undefined,
-    preview: tracesPreviewEnabled,
+    preview: true,
   });
 
   const { booleanFlag } = useBooleanFlag();
   const { value: metadataIsEnabled } = booleanFlag('enable-step-metadata', false);
-  const scoreMetadata = trace.metadata?.filter((md) => md.kind === 'inngest.score') ?? [];
-  const nonScoreMetadata = trace.metadata?.filter((md) => md.kind !== 'inngest.score') ?? [];
+  const scoreMetadata =
+    trace.metadata?.filter((md) => isScoreKind(canonicalMetadataKind(md))) ?? [];
+  const nonScoreMetadata =
+    trace.metadata?.filter((md) => !isScoreKind(canonicalMetadataKind(md))) ?? [];
   const hasMetadataTab = metadataIsEnabled && nonScoreMetadata.length > 0;
 
   useEffect(() => {
@@ -175,7 +174,6 @@ export const StepInfo = ({
     stepInfo: trace.stepInfo,
   });
 
-  const aiOutput = result?.data ? parseAIOutput(result.data) : undefined;
   const prettyInput = usePrettyJson(result?.input ?? '') || (result?.input ?? '');
   const prettyOutput = usePrettyJson(result?.data ?? '') || (result?.data ?? '');
   const prettyErrorBody = usePrettyErrorBody(result?.error);
@@ -282,8 +280,6 @@ export const StepInfo = ({
           </ElementWrapper>
 
           {stepKindInfo}
-
-          {aiOutput && <AITrace aiOutput={aiOutput} />}
         </div>
       )}
 

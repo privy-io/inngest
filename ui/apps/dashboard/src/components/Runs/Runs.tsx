@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo } from 'react';
 import { InfiniteScrollTrigger } from '@inngest/components/InfiniteScrollTrigger/InfiniteScrollTrigger';
 import { RunsPage } from '@inngest/components/RunsPage/RunsPage';
-import { useBooleanFlag } from '@inngest/components/SharedContext/useBooleanFlag';
 import { useCalculatedStartTime } from '@inngest/components/hooks/useCalculatedStartTime';
 import {
   useBooleanSearchParam,
@@ -11,10 +10,15 @@ import {
 import { CombinedError, useQuery } from 'urql';
 
 import { useEnvironment } from '@/components/Environments/environment-context';
+import { renderRunAIDebug } from '@/components/RunDetails/RunAIDebug';
 import { useGetTrigger } from '@/components/RunDetails/useGetTrigger';
-import { GetFunctionPauseStateDocument, RunsOrderByField } from '@/gql/graphql';
+import { RunsOrderByField } from '@/gql/graphql';
+import { useFunction } from '@/queries/functions';
 import { useAccountFeatures } from '@/utils/useAccountFeatures';
+import { RunAIAssist } from './AIAssist/RunAIAssist';
 import { AppFilterDocument, CountRunsDocument } from './queries';
+import { decodeRunsFrontier, getRestAppIDs, RunsAPIError } from './restRuns';
+import { runsInsightsHref } from './runsInsights';
 import { useRunsPagination } from './useRunsPagination';
 import { toRunStatuses, toTimeField } from './utils';
 
@@ -36,9 +40,18 @@ type EnvProps = {
 
 type Props = FnProps | EnvProps;
 
-const parseCelSearchError = (combinedError: CombinedError | undefined) => {
-  return combinedError?.graphQLErrors.find(
-    (error) => error.extensions.code == 'expression_invalid',
+const parseCelSearchError = (error: CombinedError | Error | undefined) => {
+  // REST returns Error subclasses while URQL returns CombinedError. Check each
+  // shape before reading transport-specific fields.
+  if (
+    error instanceof RunsAPIError &&
+    (error.code === 'expression_invalid' || error.code === 'query_too_long')
+  ) {
+    return error;
+  }
+  if (!(error instanceof CombinedError)) return;
+  return error.graphQLErrors.find(
+    (item) => item.extensions.code === 'expression_invalid',
   );
 };
 
@@ -48,28 +61,20 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
 ) {
   const env = useEnvironment();
 
-  const [{ data: pauseData }] = useQuery({
+  const [
+    { data: functionData, error: functionError, fetching: isFunctionLoading },
+    functionRefetch,
+  ] = useFunction({
+    functionSlug: functionSlug ?? '',
     pause: scope !== 'fn',
-    query: GetFunctionPauseStateDocument,
-    variables: {
-      environmentID: env.id,
-      functionSlug: functionSlug ?? '',
-    },
   });
 
-  const [appsRes] = useQuery({
+  const [appsRes, appsRefetch] = useQuery({
     pause: scope === 'fn',
     query: AppFilterDocument,
     variables: { envSlug: env.slug },
   });
 
-  const { booleanFlag } = useBooleanFlag();
-
-  const { value: tracePreviewEnabled } = booleanFlag(
-    'traces-preview',
-    true,
-    true,
-  );
   const [appIDs] = useStringArraySearchParam('filterApp');
   const [rawFilteredStatus] = useStringArraySearchParam('filterStatus');
   const [rawTimeField = RunsOrderByField.QueuedAt] =
@@ -92,11 +97,19 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
     return toRunStatuses(rawFilteredStatus ?? []);
   }, [rawFilteredStatus]);
 
+  // TODO: Once REST is fully rolled out, store external app IDs in filterApp
+  // and remove this translation, even though that will break old bookmarks.
+  const restAppIDs = useMemo(
+    () => getRestAppIDs(appIDs, appsRes.data?.env?.apps),
+    [appIDs, appsRes.data?.env?.apps],
+  );
+
   const environment = useEnvironment();
 
   const commonQueryVars = useMemo(
     () => ({
       appIDs: appIDs ?? null,
+      restAppIDs,
       environmentID: environment.id,
       functionSlug: functionSlug ?? null,
       startTime: calculatedStartTime.toISOString(),
@@ -105,9 +118,12 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
       timeField,
       celQuery: search,
       isDeferred: excludeDeferred ? false : null,
+      environmentSlug: environment.slug,
+      functionAppID: functionData?.workspace.workflow?.app.externalID ?? null,
     }),
     [
       appIDs,
+      restAppIDs,
       environment.id,
       functionSlug,
       calculatedStartTime,
@@ -116,8 +132,26 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
       timeField,
       search,
       excludeDeferred,
+      environment.slug,
+      functionData?.workspace.workflow?.app.externalID,
     ],
   );
+
+  const isRestRunsMetadataLoading =
+    (scope === 'env' && restAppIDs === undefined && appsRes.fetching) ||
+    (scope === 'fn' &&
+      commonQueryVars.functionAppID === null &&
+      isFunctionLoading);
+  let metadataError: Error | undefined;
+  if (!isRestRunsMetadataLoading) {
+    if (scope === 'env' && restAppIDs === undefined) {
+      metadataError = appsRes.error ?? new Error('Unable to load app metadata');
+    } else if (scope === 'fn' && commonQueryVars.functionAppID === null) {
+      metadataError =
+        functionError ?? new Error('Unable to load function metadata');
+    }
+  }
+  const pauseRuns = isRestRunsMetadataLoading || metadataError !== undefined;
 
   // Use the new hook to manage pagination
   const {
@@ -128,12 +162,14 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
     loadMore,
     reset,
     error: paginationError,
+    progressiveSearch,
   } = useRunsPagination({
     commonQueryVars,
-    tracePreviewEnabled,
+    pause: pauseRuns,
   });
 
   const [countRes, countRefetch] = useQuery({
+    pause: pauseRuns || Boolean(search),
     query: CountRunsDocument,
     requestPolicy: 'network-only',
     variables: commonQueryVars,
@@ -153,9 +189,21 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
   }, []);
 
   const onRefresh = useCallback(() => {
+    if (metadataError) {
+      const refetch = scope === 'fn' ? functionRefetch : appsRefetch;
+      refetch({ requestPolicy: 'network-only' });
+    }
     reset();
-    countRefetch();
-  }, [reset]);
+    if (!search) countRefetch();
+  }, [
+    appsRefetch,
+    countRefetch,
+    functionRefetch,
+    metadataError,
+    reset,
+    scope,
+    search,
+  ]);
 
   useImperativeHandle(ref, () => ({
     refresh: () => {
@@ -163,8 +211,35 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
     },
   }));
 
+  const functionInsightsSlug = functionData?.workspace.workflow?.slug;
+  const insightsHref =
+    scope === 'fn' && !functionInsightsSlug
+      ? undefined
+      : runsInsightsHref({
+          envSlug: environment.slug,
+          celQuery: search ?? '',
+          functionSlug: scope === 'fn' ? (functionInsightsSlug ?? null) : null,
+        });
+
   return (
     <RunsPage
+      renderRunAction={renderRunAIDebug}
+      toolbarActions={
+        <RunAIAssist
+          key={`${environment.id}:${functionSlug ?? 'env'}`}
+          scope={scope}
+          environmentSlug={environment.slug}
+          environmentID={environment.id}
+          apps={appsRes.data?.env?.apps}
+          functionAppID={functionData?.workspace.workflow?.app.externalID}
+          functionSlug={
+            scope === 'fn' ? functionData?.workspace.workflow?.slug : undefined
+          }
+          metadataLoading={isRestRunsMetadataLoading}
+          metadataError={Boolean(metadataError)}
+          onRetry={onRefresh}
+        />
+      }
       apps={appsRes.data?.env?.apps.map((app) => ({
         id: app.id,
         name: app.externalID,
@@ -172,20 +247,31 @@ export const Runs = forwardRef<RefreshRunsRef, Props>(function Runs(
       data={runs}
       features={{
         history: features.data?.history ?? 7,
-        tracesPreview: tracePreviewEnabled,
         isDeferred: true,
       }}
       hasMore={hasNextPage}
-      isLoadingInitial={isLoadingInitial}
-      isLoadingMore={isLoadingMore}
+      isLoadingInitial={metadataError ? false : isLoadingInitial}
+      isLoadingMore={metadataError ? false : isLoadingMore}
       onRefresh={onRefresh}
       onScrollToTop={onScrollToTop}
       getTrigger={getTrigger}
-      functionIsPaused={pauseData?.environment.function?.isPaused ?? false}
+      functionIsPaused={functionData?.workspace.workflow?.isPaused ?? false}
       scope={scope}
       totalCount={totalCount}
       searchError={searchError}
-      error={paginationError}
+      error={metadataError ?? paginationError}
+      progressiveSearch={
+        progressiveSearch
+          ? {
+              ...progressiveSearch,
+              searchedThrough: decodeRunsFrontier(
+                progressiveSearch.cursor,
+                timeField,
+              ),
+              insightsHref,
+            }
+          : undefined
+      }
       pollInterval={DEFAULT_POLL_INTERVAL}
       infiniteScrollTrigger={(containerRef) => (
         <InfiniteScrollTrigger

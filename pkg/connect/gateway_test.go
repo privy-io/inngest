@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/aws/smithy-go/ptr"
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 	connectConfig "github.com/inngest/inngest/pkg/config/connect"
@@ -39,11 +38,44 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var testExecutorIP = net.ParseIP("127.0.0.1")
+
+func TestGatewayGRPCMessageSize(t *testing.T) {
+	svc := NewConnectGatewayService()
+	connect.RegisterConnectGatewayServer(svc.grpcServer, svc)
+	lis := bufconn.Listen(1024 * 1024)
+	go func() { _ = svc.grpcServer.Serve(lis) }()
+	t.Cleanup(svc.grpcServer.Stop)
+	t.Cleanup(func() { _ = lis.Close() })
+	clients := connectGRPC.NewGRPCClientManager(connect.NewConnectGatewayClient,
+		connectGRPC.WithDialer[connect.ConnectGatewayClient](func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+			return grpc.NewClient("passthrough:///gateway", append(opts, grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+				return lis.Dial()
+			}))...)
+		}))
+	t.Cleanup(func() { clients.RemoveClient("gateway") })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := clients.GetOrCreateClient(ctx, "gateway", "gateway")
+	require.NoError(t, err)
+	for _, size := range []int{9 * 1024 * 1024, 16 * 1024 * 1024} {
+		req := &connect.ForwardRequest{ConnectionID: "missing", Data: &connect.GatewayExecutorRequestData{RequestPayload: make([]byte, size)}}
+		resp, err := client.Forward(ctx, req)
+		if size == 9*1024*1024 {
+			require.Greater(t, proto.Size(req), 4*1024*1024)
+			require.Less(t, proto.Size(req), 16*1024*1024)
+			require.NoError(t, err)
+			require.False(t, resp.Success, "decoded by handler; connection does not exist")
+		} else {
+			require.Equal(t, codes.ResourceExhausted, status.Code(err))
+		}
+	}
+}
 
 func TestConnectionEstablished(t *testing.T) {
 	res := createTestingGateway(t)
@@ -96,7 +128,7 @@ func TestLeaseRenewal(t *testing.T) {
 		AppName:        res.appName,
 		FunctionId:     res.fnID.String(),
 		FunctionSlug:   res.fnSlug,
-		StepId:         ptr.String("step"),
+		StepId:         new("step"),
 		RequestPayload: []byte("hello world"),
 		RunId:          res.runID.String(),
 		LeaseId:        leaseID.String(),
@@ -174,7 +206,7 @@ func TestLeaseRenewalWithInvalidLeaseShouldNotClose(t *testing.T) {
 		AppName:        res.appName,
 		FunctionId:     res.fnID.String(),
 		FunctionSlug:   res.fnSlug,
-		StepId:         ptr.String("step"),
+		StepId:         new("step"),
 		RequestPayload: []byte("hello world"),
 		RunId:          res.runID.String(),
 		LeaseId:        leaseID.String(),
@@ -284,7 +316,7 @@ func TestLeaseRenewalWithDeletedLeaseShouldNotClose(t *testing.T) {
 		AppName:        res.appName,
 		FunctionId:     res.fnID.String(),
 		FunctionSlug:   res.fnSlug,
-		StepId:         ptr.String("step"),
+		StepId:         new("step"),
 		RequestPayload: []byte("hello world"),
 		RunId:          res.runID.String(),
 		LeaseId:        leaseID.String(),
@@ -392,7 +424,7 @@ func TestExecutorMessageForwardingGRPC(t *testing.T) {
 		AppName:        res.appName,
 		FunctionId:     res.fnID.String(),
 		FunctionSlug:   res.fnSlug,
-		StepId:         ptr.String("step"),
+		StepId:         new("step"),
 		RequestPayload: []byte("hello world"),
 		RunId:          res.runID.String(),
 		LeaseId:        "lease-test",
@@ -1192,7 +1224,7 @@ func createTestingGateway(t *testing.T, params ...testingParameters) testingReso
 
 	testApp := &connect.AppConfiguration{
 		AppName:    appName,
-		AppVersion: ptr.String("v1"),
+		AppVersion: new("v1"),
 		Functions:  fns,
 	}
 
@@ -1388,13 +1420,13 @@ type replyFailingExecutor struct {
 	replyReceived chan *connect.ReplyRequest
 }
 
-func startReplyFailingExecutor(t *testing.T) *replyFailingExecutor {
+func startReplyFailingExecutor(t *testing.T, opts ...grpc.ServerOption) *replyFailingExecutor {
 	t.Helper()
 
 	executor := &replyFailingExecutor{
 		replyReceived: make(chan *connect.ReplyRequest, 1),
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(opts...)
 	connect.RegisterConnectExecutorServer(grpcServer, executor)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

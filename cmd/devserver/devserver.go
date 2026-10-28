@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/inngest/inngest/cmd/internal/cloudsandboxes"
 	localconfig "github.com/inngest/inngest/cmd/internal/config"
 	"github.com/inngest/inngest/pkg/api"
 	"github.com/inngest/inngest/pkg/config"
@@ -21,16 +22,26 @@ import (
 )
 
 func action(ctx context.Context, cmd *cli.Command) error {
+	// duckDBClosed is closed by pkg/devserver's start() only once the DuckDB
+	// dual-write subprocess has been fully torn down -- which, since start()
+	// calls service.StartAll synchronously before its shutdown defers run,
+	// is necessarily after every other service has already finished its own
+	// graceful stop too. With --duckdb, the signal handler below waits for it
+	// before exiting rather than exiting immediately on signal, which is what
+	// keeps it from reintroducing the dual-write data-loss bug the naive
+	// version of this handler caused (unflushed batches dropped on exit). A
+	// second signal still forces an immediate exit, so a wedged shutdown can
+	// always be interrupted. Without --duckdb it is closed as soon as the
+	// flags are read, preserving the exit-on-first-signal behavior.
+	duckDBClosed := make(chan struct{})
 	go func() {
-		ctx, cleanup := signal.NotifyContext(
-			context.Background(),
-			os.Interrupt,
-			syscall.SIGTERM,
-			syscall.SIGINT,
-			syscall.SIGQUIT,
-		)
-		defer cleanup()
-		<-ctx.Done()
+		sigs := make(chan os.Signal, 2)
+		signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+		<-sigs
+		select {
+		case <-duckDBClosed:
+		case <-sigs:
+		}
 		os.Exit(0)
 	}()
 
@@ -66,12 +77,26 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	tick := localconfig.GetIntValue(cmd, "tick", devserver.DefaultTick)
 	persist := localconfig.GetBoolValue(cmd, "persist", false)
 	sqliteDir := localconfig.GetValue(cmd, "sqlite-dir", "")
+	enableDuckDB := localconfig.GetBoolValue(cmd, "duckdb", false)
+	enableDuckDBReads := localconfig.GetBoolValue(cmd, "duckdb-reads", false)
+	// start() only closes DuckDBClosed when it is set; see duckDBClosed above.
+	var startDuckDBClosed chan struct{}
+	if enableDuckDB {
+		startDuckDBClosed = duckDBClosed
+	} else {
+		close(duckDBClosed)
+	}
 
 	debugAPIPort := localconfig.GetIntValue(cmd, "debug-api-port", devserver.DefaultDebugAPIPort)
 
 	connectGatewayPort := localconfig.GetIntValue(cmd, "connect-gateway-port", devserver.DefaultConnectGatewayPort)
 	connectGatewayGRPCPort := localconfig.GetIntValue(cmd, "connect-gateway-grpc-port", devserver.DefaultConnectGatewayGRPCPort)
 	connectExecutorGRPCPort := localconfig.GetIntValue(cmd, "connect-executor-grpc-port", devserver.DefaultConnectExecutorGRPCPort)
+	connectGatewayGRPCIP := localconfig.GetValue(cmd, "connect-gateway-grpc-ip", connectgrpc.DefaultConnectGRPCIP)
+	connectExecutorGRPCIP := localconfig.GetValue(cmd, "connect-executor-grpc-ip", connectgrpc.DefaultConnectGRPCIP)
+	if err := localconfig.ValidateConnectGRPCIPs(connectGatewayGRPCIP, connectExecutorGRPCIP); err != nil {
+		return err
+	}
 
 	postgresURI := localconfig.GetValue(cmd, "postgres-uri", "")
 	postgresMaxIdleConns := localconfig.GetIntValue(cmd, "postgres-max-idle-conns", 10)
@@ -94,17 +119,20 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		ConnectGatewayHost: conf.CoreAPI.Addr,
 		ConnectGRPCConfig: connectConfig.NewGRPCConfig(
 			ctx,
-			connectgrpc.DefaultConnectGRPCIP, connectGatewayGRPCPort,
-			connectgrpc.DefaultConnectGRPCIP, connectExecutorGRPCPort,
+			connectGatewayGRPCIP, connectGatewayGRPCPort,
+			connectExecutorGRPCIP, connectExecutorGRPCPort,
 		),
 		Persist:                 persist,
 		SQLiteDir:               sqliteDir,
+		EnableDuckDB:            enableDuckDB,
+		EnableDuckDBReads:       enableDuckDBReads,
 		PostgresURI:             postgresURI,
 		PostgresMaxIdleConns:    postgresMaxIdleConns,
 		PostgresMaxOpenConns:    postgresMaxOpenConns,
 		PostgresConnMaxIdleTime: postgresConnMaxIdleTime,
 		PostgresConnMaxLifetime: postgresConnMaxLifetime,
 		DebugAPIPort:            debugAPIPort,
+		DuckDBClosed:            startDuckDBClosed,
 	}
 
 	l := logger.StdlibLogger(ctx)
@@ -121,6 +149,12 @@ func action(ctx context.Context, cmd *cli.Command) error {
 			"to", change.To,
 		)
 	}
+
+	bridge, err := cloudsandboxes.New(ctx, opts.Config.EventAPI.Port)
+	if err != nil {
+		return err
+	}
+	opts.CloudSandboxes = bridge
 
 	traceEndpoint := fmt.Sprintf("localhost:%d", opts.Config.EventAPI.Port)
 	if err := itrace.NewUserTracer(ctx, itrace.TracerOpts{

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/inngest/inngest/pkg/dateutil"
 	"github.com/inngest/inngest/pkg/enums"
 	"github.com/inngest/inngest/pkg/event"
+	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/tracing/metadata"
 	"github.com/inngest/inngest/pkg/util"
 	"github.com/inngest/inngest/pkg/util/aigateway"
@@ -23,6 +25,8 @@ var (
 	ErrStepOutputTooLarge = fmt.Errorf("step output size is greater than the limit")
 	ErrDeferInputTooLarge = fmt.Errorf("defer input size is greater than the limit")
 	ErrDeferInputInvalid  = fmt.Errorf("defer input is not a valid JSON object")
+	ErrDeferMetaTooLarge  = fmt.Errorf("defer meta size is greater than the limit")
+	ErrDeferMetaInvalid   = fmt.Errorf("defer meta is not a valid JSON object")
 )
 
 type GeneratorOpcode struct {
@@ -153,22 +157,16 @@ func (g GeneratorOpcode) IsError() bool {
 
 type GenericOpts struct {
 	StackLine string `json:"stackLine,omitempty,omitzero"`
+	// Span lists the span groups the SDK called the step in, outermost first.
+	Span lenient[[]meta.SpanPathElement] `json:"span,omitempty"`
+	// Origin is the library that created the step on the user's behalf, as
+	// "<package>@<version>".
+	Origin lenient[string] `json:"origin,omitempty"`
 }
 
 func (r *GenericOpts) UnmarshalAny(a any) error {
 	opts := GenericOpts{}
-	var mappedByt []byte
-	switch typ := a.(type) {
-	case []byte:
-		mappedByt = typ
-	default:
-		byt, err := json.Marshal(a)
-		if err != nil {
-			return err
-		}
-		mappedByt = byt
-	}
-	if err := json.Unmarshal(mappedByt, &opts); err != nil {
+	if err := unmarshalOpts(a, &opts); err != nil {
 		return err
 	}
 
@@ -176,17 +174,32 @@ func (r *GenericOpts) UnmarshalAny(a any) error {
 	return nil
 }
 
-func (g GeneratorOpcode) StackLine() (*string, error) {
-	opts := &GenericOpts{}
-	if err := opts.UnmarshalAny(g.Opts); err != nil {
-		return nil, err
+// SetOpt sets one key in the opcode's opts, keeping every other key the SDK
+// sent, such as stackLine and parallelMode.
+func (g *GeneratorOpcode) SetOpt(key string, value any) error {
+	var opts map[string]any
+	if err := unmarshalOpts(g.Opts, &opts); err != nil {
+		return err
+	}
+	if opts == nil {
+		opts = map[string]any{}
 	}
 
-	if opts.StackLine == "" {
-		return nil, nil
-	}
+	opts[key] = value
+	g.Opts = opts
+	return nil
+}
 
-	return &opts.StackLine, nil
+// unmarshalOpts decodes opts, raw JSON or already decoded, into v.
+func unmarshalOpts(opts any, v any) error {
+	byt, ok := opts.([]byte)
+	if !ok {
+		var err error
+		if byt, err = json.Marshal(opts); err != nil {
+			return err
+		}
+	}
+	return json.Unmarshal(byt, v)
 }
 
 // Returns, if any, the type of a StepRun operation.
@@ -424,6 +437,12 @@ func (g GeneratorOpcode) DeferAddOpts() (*DeferAddOpts, error) {
 type DeferAddOpts struct {
 	FnSlug string          `json:"fn_slug"`
 	Input  json.RawMessage `json:"input,omitempty"`
+
+	// Meta carries control metadata (SDK-stamped session layers) for the
+	// deferred run. Opaque here: persisted with the defer and resolved onto
+	// the inngest/deferred.schedule event at finalize. Distinct from Input,
+	// which is the user payload.
+	Meta json.RawMessage `json:"meta,omitempty"`
 }
 
 func (d *DeferAddOpts) Validate() error {
@@ -439,6 +458,29 @@ func (d *DeferAddOpts) Validate() error {
 		// Redis (per defer × per run) and inflating them into the
 		// deferred.schedule event bus on Finalize.
 		return ErrDeferInputTooLarge
+	}
+	// Meta is optional. A literal `null` is accepted as a special case.
+	if meta := bytes.TrimSpace(d.Meta); len(meta) > 0 && !bytes.Equal(meta, []byte("null")) {
+		if !util.IsJSONObject(meta) {
+			// Object shape is checked here rather than left to finalize: a
+			// non-object Meta (`3`, `"x"`, `[1]`) would persist happily and only fail
+			// in buildDeferEvents, after the parent run has finished, where the
+			// deferred run can only be dropped. Rejecting at op receipt turns it
+			// into a rejectReason with the existing metric and rejected span.
+			return ErrDeferMetaInvalid
+		}
+	}
+	if len(d.Meta) > consts.MaxEventMetaSize {
+		// Meta is persisted as a raw, unparsed blob until the parent run
+		// finalizes (up to a year, x MaxDefersPerRun), so this byte cap is its
+		// only bound before then. A raw length check avoids parsing here,
+		// keeping the tombstone single-hop invariant intact; shape and size of
+		// the sessions themselves are validated post-merge at finalize. The
+		// sibling primitives don't need this cap: invoke materializes and
+		// validates its payload at op receipt and resolves in-request, and
+		// sendEvent meta rides inside the event, bounded by the event-size
+		// caps at API ingest.
+		return ErrDeferMetaTooLarge
 	}
 	return nil
 }
@@ -473,6 +515,8 @@ func (g GeneratorOpcode) DeferAbortOpts() (*DeferAbortOpts, error) {
 
 type DeferAbortOpts struct {
 	TargetHashedID string `json:"target_hashed_id"`
+
+	FnSlug string `json:"fn_slug"`
 }
 
 func (d *DeferAbortOpts) Validate() error {
@@ -693,4 +737,18 @@ func (g *GeneratorOpcode) ParallelMode() enums.ParallelMode {
 	}
 
 	return mode
+}
+
+// lenient decodes to its zero value, rather than failing the whole decode, when
+// the SDK sends a value of the wrong shape.
+type lenient[T any] struct {
+	Value T
+}
+
+func (l *lenient[T]) UnmarshalJSON(byt []byte) error {
+	if err := json.Unmarshal(byt, &l.Value); err != nil {
+		var zero T
+		l.Value = zero
+	}
+	return nil
 }

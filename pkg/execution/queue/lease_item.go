@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/inngest/inngest/pkg/constraintapi"
 	"github.com/inngest/inngest/pkg/enums"
 	"github.com/inngest/inngest/pkg/logger"
 	"github.com/inngest/inngest/pkg/telemetry/metrics"
@@ -136,6 +137,14 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 		q.Clock().Now(),
 	)
 	if err != nil {
+		if errors.Is(err, constraintapi.ErrConstraintShardNotFound) {
+			if dropErr := q.dropPermanentlyUnroutableItem(ctx, *item, err); dropErr == nil {
+				span.SetAttributes(attribute.String("skip_reason", "constraint_shard_not_found"))
+				return LeaseItemResult{Status: LeaseItemStatusDropped}, nil
+			} else {
+				err = errors.Join(err, dropErr)
+			}
+		}
 		span.RecordError(err)
 		l.ReportError(err, "could not check constraints to lease item")
 		// Stop iterator but don't quit the queue.
@@ -259,7 +268,7 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 			Tags:    map[string]any{"status": "throttled", "queue_shard": q.Shard().Name(), "constraint_source": "constraintapi"},
 		})
 
-		if q.Options().ItemEnableKeyQueues(ctx, *item) {
+		if !req.SkipRequeueOnLimit && q.Options().ItemEnableKeyQueues(ctx, *item) {
 			err := q.Shard().Requeue(ctx, *item, time.UnixMilli(item.AtMS))
 			if err != nil && !errors.Is(err, ErrQueueItemNotFound) {
 				l.ReportError(err, "could not requeue item to backlog after hitting throttle limit",
@@ -315,7 +324,7 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 			Tags:    map[string]any{"status": status, "queue_shard": q.Shard().Name(), "constraint_source": "constraintapi"},
 		})
 
-		if q.Options().ItemEnableKeyQueues(ctx, *item) {
+		if !req.SkipRequeueOnLimit && q.Options().ItemEnableKeyQueues(ctx, *item) {
 			err := q.Shard().Requeue(ctx, *item, time.UnixMilli(item.AtMS))
 			if err != nil && !errors.Is(err, ErrQueueItemNotFound) {
 				l.ReportError(err, "could not requeue item to backlog after hitting concurrency limit",
@@ -349,7 +358,7 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 			Tags:    map[string]any{"status": "custom_key_concurrency_limit", "queue_shard": q.Shard().Name(), "constraint_source": "constraintapi"},
 		})
 
-		if q.Options().ItemEnableKeyQueues(ctx, *item) {
+		if !req.SkipRequeueOnLimit && q.Options().ItemEnableKeyQueues(ctx, *item) {
 			err := q.Shard().Requeue(ctx, *item, time.UnixMilli(item.AtMS))
 			if err != nil && !errors.Is(err, ErrQueueItemNotFound) {
 				l.ReportError(err, "could not requeue item to backlog after hitting custom concurrency limit",
@@ -369,14 +378,33 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 		}
 		return LeaseItemResult{Status: LeaseItemStatusCustomConcurrencyLimited, RetryAfter: limitedRetryAfter}, nil
 	case errors.Is(cause, ErrSemaphoreLimit):
-		// Semaphore capacity exhausted for this specific item (e.g., start job with fn concurrency).
-		// Skip this item and continue scanning; other items without semaphores (step 2, etc.)
-		// can still be processed.
+		result := LeaseItemResult{
+			Status:              LeaseItemStatusSemaphoreLimited,
+			RetryAfter:          limitedRetryAfter,
+			ExhaustedSemaphores: constraintRes.ExhaustedSemaphores,
+		}
+		appLimited := hasAppSemaphore(constraintRes.ExhaustedSemaphores)
+
 		metrics.IncrQueueItemProcessedCounter(ctx, metrics.CounterOpt{
 			PkgName: pkgName,
-			Tags:    map[string]any{"status": "semaphore_limit", "queue_shard": q.Shard().Name(), "constraint_source": "constraintapi"},
+			Tags: map[string]any{
+				"status":            "semaphore_limit",
+				"queue_shard":       q.Shard().Name(),
+				"constraint_source": "constraintapi",
+				"app_semaphore":     appLimited,
+			},
 		})
-		return LeaseItemResult{Status: LeaseItemStatusSemaphoreLimited, RetryAfter: limitedRetryAfter}, nil
+
+		if appLimited {
+			// a partition is one function and a function belongs to one app, so every
+			// remaining item carries this exhausted app semaphore.  stop the iterator
+			// the same way fn concurrency does instead of checking each item.
+			return result, fmt.Errorf("semaphore hit: %w", ErrProcessNoUserConstraintCapacity)
+		}
+
+		// fn and fnkey semaphores are only on start items.  later steps of runs that
+		// already hold the semaphore carry none, so keep scanning.
+		return result, nil
 	case errors.Is(cause, ErrQueueItemNotFound):
 		// This is an okay error.  Move to the next job item.
 		metrics.IncrQueueItemProcessedCounter(ctx, metrics.CounterOpt{
@@ -414,13 +442,17 @@ func (q *queueProcessor) LeaseItem(ctx context.Context, req LeaseItemRequest, di
 		PkgName: pkgName,
 		Tags:    map[string]any{"status": "success", "queue_shard": q.Shard().Name(), "constraint_source": "constraintapi"},
 	})
+	processCtx := context.WithoutCancel(ctx)
+	if constraintRes.ArchivedWorkspaceAppSemaphoreBypassed {
+		processCtx = WithArchivedWorkspaceAppSemaphoreBypass(processCtx)
+	}
 	_, err = dispatch(ctx, ProcessItem{
 		I:             *item,
 		Priority:      req.Priority,
 		ContinueCount: req.ContinueCount,
 
 		CapacityLease:       constraintRes.CapacityLease,
-		ConditionalTraceCtx: context.WithoutCancel(ctx),
+		ConditionalTraceCtx: processCtx,
 	})
 	result := LeaseItemResult{Status: LeaseItemStatusDispatched}
 	if err != nil {

@@ -335,6 +335,9 @@ func (m shardedMgr) New(ctx context.Context, input state.Input) (state.State, er
 		StateSize:      len(events) + len(stepsByt) + len(stepInputsByt),
 		StepCount:      len(input.Steps),
 	}
+	if !input.ScheduledAt.IsZero() {
+		metadata.ScheduledAt = input.ScheduledAt.UnixMilli()
+	}
 	if input.RunType != nil {
 		metadata.RunType = *input.RunType
 	}
@@ -549,9 +552,14 @@ func (m shardedMgr) Metadata(ctx context.Context, accountId uuid.UUID, runID uli
 }
 
 // deferMeta is the cjson-safe subset of statev2.Defer stored as the value of
-// each field in the defers-meta hash. Input lives in a separate defers-input
-// hash and is never decoded by Lua, sidestepping cjson's empty-object → array
-// and >2^53 integer precision bugs.
+// each field in the defers-meta hash. Values here are decoded and re-encoded by
+// Lua on every status transition (setDeferStatus.lua, and saveDefer.lua's
+// aggregate-cap Rejected path), so they are subject to cjson's empty-object →
+// array and >2^53 integer precision bugs.
+//
+// The two user-controlled blobs are therefore stored outside this struct, in
+// hashes Lua only ever writes verbatim or deletes wholesale: Input in
+// defers-input, and Meta in defers-control-meta.
 //
 // DO NOT add fields here without first verifying they are cjson-safe. Safe
 // field types are strings and small ints (status enums, bounded counts).
@@ -567,7 +575,7 @@ type deferMeta struct {
 }
 
 // LoadDefersMeta returns each defer's metadata without loading Input. Use this
-// from any path that only needs FnSlug / HashedID / ScheduleStatus
+// from any path that only needs FnSlug / HashedID / ScheduleStatus / Meta
 func (m shardedMgr) LoadDefersMeta(
 	ctx context.Context,
 	accountId uuid.UUID,
@@ -623,17 +631,36 @@ func (m shardedMgr) LoadDefersMeta(
 		hashedIDs = hashedIDs[:consts.MaxDefersPerRun]
 	}
 
+	// Control metadata lives in its own hash so Lua never runs it through
+	// cjson. Skipped when the run has no defers at all, keeping the no-defer
+	// path a single round trip.
+	control := map[string]string{}
+	if len(hashedIDs) > 0 {
+		control, err = r.Do(ctx, func(client rueidis.Client) rueidis.Completed {
+			return client.B().Hgetall().Key(
+				fnRunState.kg.DefersControlMeta(ctx, isSharded, fnID, runID),
+			).Build()
+		}).AsStrMap()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	metas := make(map[string]statev2.DeferMeta, len(hashedIDs))
 	for _, hashedID := range hashedIDs {
 		var meta deferMeta
 		if err := json.Unmarshal([]byte(rmap[hashedID]), &meta); err != nil {
 			return nil, err
 		}
-		metas[hashedID] = statev2.DeferMeta{
+		dm := statev2.DeferMeta{
 			FnSlug:         meta.FnSlug,
 			HashedID:       meta.HashedID,
 			ScheduleStatus: enums.DeferStatus(meta.ScheduleStatus),
 		}
+		if raw, ok := control[hashedID]; ok && len(raw) > 0 {
+			dm.Meta = json.RawMessage(raw)
+		}
+		metas[hashedID] = dm
 	}
 	return metas, nil
 }
@@ -677,6 +704,7 @@ func (m shardedMgr) LoadDefers(
 			FnSlug:         meta.FnSlug,
 			HashedID:       meta.HashedID,
 			ScheduleStatus: meta.ScheduleStatus,
+			Meta:           meta.Meta,
 		}
 		if raw, ok := inputs[hashedID]; ok && len(raw) > 0 {
 			d.Input = json.RawMessage(raw)
@@ -949,6 +977,7 @@ func (m shardedMgr) SaveDefer(ctx context.Context, accountId uuid.UUID, fnID uui
 		string(d.Input),
 		consts.MaxDefersPerRun,
 		consts.MaxDeferInputAggregateSize,
+		string(d.Meta),
 	})
 	if err != nil {
 		return err
@@ -961,6 +990,7 @@ func (m shardedMgr) SaveDefer(ctx context.Context, accountId uuid.UUID, fnID uui
 			fnRunState.kg.DefersMeta(ctx, isSharded, fnID, runID),
 			fnRunState.kg.DefersInput(ctx, isSharded, fnID, runID),
 			fnRunState.kg.RunMetadata(ctx, isSharded, runID),
+			fnRunState.kg.DefersControlMeta(ctx, isSharded, fnID, runID),
 		},
 		args,
 	).AsInt64()
@@ -1169,6 +1199,7 @@ func (m shardedMgr) delete(ctx context.Context, callCtx context.Context, i state
 		fnRunState.kg.Pending(ctx, isSharded, i),
 		fnRunState.kg.DefersMeta(ctx, isSharded, i.WorkflowID, i.RunID),
 		fnRunState.kg.DefersInput(ctx, isSharded, i.WorkflowID, i.RunID),
+		fnRunState.kg.DefersControlMeta(ctx, isSharded, i.WorkflowID, i.RunID),
 	}
 
 	result := r.Do(callCtx, func(client rueidis.Client) rueidis.Completed {
@@ -1507,6 +1538,14 @@ func newRunMetadata(data map[string]string) (*runMetadata, error) {
 		m.StartedAt = v
 	}
 
+	if val, ok := data["schat"]; ok && val != "" {
+		v, err := strconv.ParseInt(strings.TrimSuffix(val, ".0"), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid scheduled at timestamp detected: %#v", val)
+		}
+		m.ScheduledAt = v
+	}
+
 	// The below fields are optional
 	if val, ok := data["debugger"]; ok {
 		if val == "true" || val == "1" {
@@ -1698,6 +1737,7 @@ type runMetadata struct {
 	DisableImmediateExecution bool           `json:"die,omitempty"`
 	SpanID                    string         `json:"sid"`
 	StartedAt                 int64          `json:"sat,omitempty"`
+	ScheduledAt               int64          `json:"schat,omitempty"`
 	HasAI                     bool           `json:"hasAI,omitempty"`
 }
 
@@ -1713,6 +1753,7 @@ func (r runMetadata) Map() map[string]any {
 		"die":           r.DisableImmediateExecution,
 		"sid":           r.SpanID,
 		"sat":           r.StartedAt,
+		"schat":         r.ScheduledAt,
 		"hasAI":         r.HasAI,
 		"state_size":    r.StateSize,
 		"event_size":    r.EventSize,

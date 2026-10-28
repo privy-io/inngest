@@ -2,6 +2,7 @@ package start
 
 import (
 	"github.com/inngest/inngest/pkg/api"
+	connectgrpc "github.com/inngest/inngest/pkg/connect/grpc"
 	"github.com/inngest/inngest/pkg/devserver"
 	"github.com/urfave/cli/v3"
 )
@@ -116,10 +117,50 @@ func Command() *cli.Command {
 				Value:    devserver.DefaultConnectGatewayPort,
 				Usage:    "Port to expose connect gateway endpoint",
 			},
+			&cli.IntFlag{
+				Category: "Advanced",
+				Name:     "connect-gateway-grpc-port",
+				Value:    devserver.DefaultConnectGatewayGRPCPort,
+				Usage:    "Port to expose connect gateway gRPC endpoint",
+			},
+			&cli.IntFlag{
+				Category: "Advanced",
+				Name:     "connect-executor-grpc-port",
+				Value:    devserver.DefaultConnectExecutorGRPCPort,
+				Usage:    "Port to expose connect executor gRPC endpoint",
+			},
+			&cli.StringFlag{
+				Category: "Advanced",
+				Name:     "connect-gateway-grpc-ip",
+				Value:    connectgrpc.DefaultConnectGRPCIP,
+				Usage:    "IP address other instances use to reach the connect gateway gRPC server",
+			},
+			&cli.StringFlag{
+				Category: "Advanced",
+				Name:     "connect-executor-grpc-ip",
+				Value:    connectgrpc.DefaultConnectGRPCIP,
+				Usage:    "IP address other instances use to reach the connect executor gRPC server",
+			},
 			&cli.BoolFlag{
 				Category: "Advanced",
 				Name:     "no-ui",
 				Usage:    "Disable the web UI and GraphQL API endpoint",
+			},
+			&cli.BoolFlag{
+				Category: "Advanced",
+				Name:     "duckdb",
+				// `inngest start` always persists, so with
+				// EXPERIMENTAL_DUCKDB_PERSISTENT_DUALWRITE=true this writes an
+				// on-disk DuckLake catalog — into --postgres-uri's database
+				// when set (see pkg/devserver's duckLakeOptionsFor).
+				Usage: "Enable the experimental DuckDB dual-write POC. Requires EXPERIMENTAL_DUCKDB_PERSISTENT_DUALWRITE=true, and when --postgres-uri is set, stores the DuckLake catalog tables in that same Postgres database",
+				Value: false,
+			},
+			&cli.BoolFlag{
+				Category: "Advanced",
+				Name:     "duckdb-reads",
+				Usage:    "Serve the GQL API and REST trace/run endpoints from DuckDB (requires --duckdb)",
+				Value:    false,
 			},
 		},
 	}

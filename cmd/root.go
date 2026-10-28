@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/inngest/inngest/cmd/apiv2cli"
+	authcmd "github.com/inngest/inngest/cmd/auth"
 	"github.com/inngest/inngest/cmd/devserver"
+	"github.com/inngest/inngest/cmd/duckdb"
 	"github.com/inngest/inngest/cmd/start"
 	"github.com/inngest/inngest/cmd/version"
 	"github.com/inngest/inngest/pkg/api/tel"
@@ -94,8 +97,12 @@ func execute() {
 
 		Flags: globalFlags,
 		Commands: []*cli.Command{
+			authcmd.LoginCommand(),
+			authcmd.LogoutCommand(),
+			authcmd.AuthCommand(),
 			apiv2cli.Command(),
 			devserver.Command(),
+			duckdb.Command(),
 			version.Command(),
 			start.Command(),
 			alpha(),
@@ -108,6 +115,10 @@ func execute() {
 	}
 
 	if err := app.Run(context.Background(), os.Args); err != nil {
+		var reported *authcmd.ReportedError
+		if errors.As(err, &reported) {
+			os.Exit(1)
+		}
 		fmt.Println(err)
 		os.Exit(1)
 	}

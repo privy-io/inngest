@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/inngest/inngest/pkg/api/v2/apiv2base"
+	"github.com/inngest/inngest/pkg/api/v2/apiv2endpoint"
 	loader "github.com/inngest/inngest/pkg/coreapi/graph/loaders"
 	"github.com/inngest/inngest/pkg/coreapi/graph/models"
 	"github.com/inngest/inngest/pkg/cqrs"
@@ -26,6 +27,20 @@ const (
 	maxEventRunsLimit     = 40
 	defaultRunsLimit      = 20
 	maxRunsLimit          = 100
+	// This is an intentionally arbitrary, conservative URL compatibility limit,
+	// not a constraint imposed by CEL or the run storage backend.
+	maxRunsCELBytes = 2048
+)
+
+var runsCELTooLongMessage = fmt.Sprintf("Query cannot exceed %d bytes", maxRunsCELBytes)
+
+var (
+	listRunsProviderIncludes = map[ListRunsInclude]RunListInclude{
+		ListRunsIncludeDeferredFrom: RunListIncludeDeferredFrom,
+	}
+	listFunctionRunsProviderIncludes = map[ListFunctionRunsInclude]RunListInclude{
+		ListFunctionRunsIncludeDeferredFrom: RunListIncludeDeferredFrom,
+	}
 )
 
 func (s *Service) GetFunctionRun(ctx context.Context, req *apiv2.GetFunctionRunRequest) (*apiv2.GetFunctionRunResponse, error) {
@@ -42,7 +57,16 @@ func (s *Service) GetFunctionRun(ctx context.Context, req *apiv2.GetFunctionRunR
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, "Run ID must be a valid ULID")
 	}
 
-	includeOutput := req.GetIncludeOutput()
+	includeOutput, _, err := runIncludesFromAPI(
+		getFunctionRunIncludeSelector,
+		req.GetIncludeOutput(),
+		req.GetInclude(),
+		GetFunctionRunIncludeOutput,
+		nil,
+	)
+	if err != nil {
+		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
+	}
 	run, err := s.runs.GetRun(ctx, runID, GetRunOpts{
 		IncludeOutput: includeOutput,
 	})
@@ -67,6 +91,10 @@ func (s *Service) GetFunctionRun(ctx context.Context, req *apiv2.GetFunctionRunR
 }
 
 func (s *Service) ListRuns(ctx context.Context, req *apiv2.ListRunsRequest) (*apiv2.ListRunsResponse, error) {
+	if len(req.GetQuery()) > maxRunsCELBytes {
+		return nil, s.base.NewError(http.StatusUnprocessableEntity, apiv2base.ErrorQueryTooLong, runsCELTooLongMessage)
+	}
+
 	if result := s.rateLimiter.CheckRateLimit(ctx, apiv2.V2_ListRuns_FullMethodName); result.Limited {
 		return nil, s.base.NewError(http.StatusTooManyRequests, apiv2base.ErrorRateLimited,
 			"API rate limit exceeded. The request was rejected and no runs were fetched.")
@@ -76,7 +104,12 @@ func (s *Service) ListRuns(ctx context.Context, req *apiv2.ListRunsRequest) (*ap
 		return nil, s.base.NewError(http.StatusNotImplemented, apiv2base.ErrorNotImplemented, "List runs is not yet implemented")
 	}
 
-	opts, err := listRunsOpts(req)
+	opts, err := listRunsOpts(
+		req,
+		listRunsIncludeSelector,
+		ListRunsIncludeOutput,
+		listRunsProviderIncludes,
+	)
 	if err != nil {
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
 	}
@@ -85,6 +118,10 @@ func (s *Service) ListRuns(ctx context.Context, req *apiv2.ListRunsRequest) (*ap
 }
 
 func (s *Service) ListFunctionRuns(ctx context.Context, req *apiv2.ListFunctionRunsRequest) (*apiv2.ListFunctionRunsResponse, error) {
+	if len(req.GetQuery()) > maxRunsCELBytes {
+		return nil, s.base.NewError(http.StatusUnprocessableEntity, apiv2base.ErrorQueryTooLong, runsCELTooLongMessage)
+	}
+
 	if req.AppId == "" || req.FunctionId == "" {
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorMissingField, "App ID and function ID are required")
 	}
@@ -110,7 +147,9 @@ func (s *Service) ListFunctionRuns(ctx context.Context, req *apiv2.ListFunctionR
 		FunctionId:    []string{decodePathParam(req.FunctionId)},
 		IsDeferred:    req.IsDeferred,
 		Order:         req.Order,
-	})
+		Query:         req.Query,
+		Include:       req.Include,
+	}, listFunctionRunsIncludeSelector, ListFunctionRunsIncludeOutput, listFunctionRunsProviderIncludes)
 	if err != nil {
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
 	}
@@ -129,6 +168,12 @@ func (s *Service) ListFunctionRuns(ctx context.Context, req *apiv2.ListFunctionR
 func (s *Service) listRuns(ctx context.Context, opts GetRunsOpts) (*apiv2.ListRunsResponse, error) {
 	result, err := s.runs.GetRuns(ctx, opts)
 	if err != nil {
+		switch {
+		case errors.Is(err, ErrExpressionInvalid):
+			return nil, s.base.NewError(http.StatusUnprocessableEntity, apiv2base.ErrorExpressionInvalid, "Query expression is invalid")
+		case errors.Is(err, ErrPausedRunStatusNotSupported):
+			return nil, s.base.NewError(http.StatusNotImplemented, apiv2base.ErrorNotImplemented, "Filtering runs by PAUSED status is not implemented")
+		}
 		return nil, s.base.NewError(http.StatusInternalServerError, apiv2base.ErrorInternalError, "Unable to fetch runs")
 	}
 	if result == nil {
@@ -139,11 +184,17 @@ func (s *Service) listRuns(ctx context.Context, opts GetRunsOpts) (*apiv2.ListRu
 	for _, run := range result.Runs {
 		data = append(data, toAPIRunListItem(run))
 	}
+	page := runsPage(result.Runs, opts.Limit, result.HasMore)
+	// Cloud's RunProvider.GetRuns may return a scan cursor that does not
+	// correspond to a returned run. Pass it through even when the page is empty.
+	if result.Cursor != "" {
+		page.Cursor = &result.Cursor
+	}
 
 	return &apiv2.ListRunsResponse{
 		Data:     data,
 		Metadata: runsResponseMetadata(opts.From, opts.Until),
-		Page:     runsPage(result.Runs, opts.Limit, result.HasMore),
+		Page:     page,
 	}, nil
 }
 
@@ -170,11 +221,21 @@ func (s *Service) GetEventRuns(ctx context.Context, req *apiv2.GetEventRunsReque
 	if err != nil {
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
 	}
+	includeOutput, _, err := runIncludesFromAPI(
+		getEventRunsIncludeSelector,
+		req.GetIncludeOutput(),
+		req.GetInclude(),
+		GetEventRunsIncludeOutput,
+		nil,
+	)
+	if err != nil {
+		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
+	}
 	result, err := s.runs.GetRuns(ctx, GetRunsOpts{
 		EventID:       eventID,
 		Cursor:        cursor,
 		Limit:         limit,
-		IncludeOutput: req.GetIncludeOutput(),
+		IncludeOutput: includeOutput,
 	})
 	if err != nil {
 		return nil, s.base.NewError(http.StatusInternalServerError, apiv2base.ErrorInternalError, "Unable to fetch event runs")
@@ -255,7 +316,12 @@ func (s *Service) Rerun(ctx context.Context, req *apiv2.RerunRequest) (*apiv2.Re
 	}, nil
 }
 
-func listRunsOpts(req *apiv2.ListRunsRequest) (GetRunsOpts, error) {
+func listRunsOpts[T comparable](
+	req *apiv2.ListRunsRequest,
+	selector apiv2endpoint.IncludeSelector[T],
+	outputValue T,
+	providerIncludes map[T]RunListInclude,
+) (GetRunsOpts, error) {
 	if len(req.GetFunctionId()) > 0 && len(req.GetAppId()) == 0 {
 		return GetRunsOpts{}, fmt.Errorf("appId is required when filtering by functionId")
 	}
@@ -289,11 +355,21 @@ func listRunsOpts(req *apiv2.ListRunsRequest) (GetRunsOpts, error) {
 	if err != nil {
 		return GetRunsOpts{}, err
 	}
+	includeOutput, include, err := runIncludesFromAPI(
+		selector,
+		req.GetIncludeOutput(),
+		req.GetInclude(),
+		outputValue,
+		providerIncludes,
+	)
+	if err != nil {
+		return GetRunsOpts{}, err
+	}
 
 	return GetRunsOpts{
 		Cursor:        cursor,
 		Limit:         limit,
-		IncludeOutput: req.GetIncludeOutput(),
+		IncludeOutput: includeOutput,
 		From:          from,
 		Until:         until,
 		TimeField:     timeField,
@@ -302,7 +378,36 @@ func listRunsOpts(req *apiv2.ListRunsRequest) (GetRunsOpts, error) {
 		FunctionIDs:   req.GetFunctionId(),
 		IsDeferred:    req.IsDeferred,
 		Order:         order,
+		CEL:           req.GetQuery(),
+		Include:       include,
 	}, nil
+}
+
+func runIncludesFromAPI[T comparable](
+	selector apiv2endpoint.IncludeSelector[T],
+	legacyOutput bool,
+	values []string,
+	outputValue T,
+	providerIncludes map[T]RunListInclude,
+) (bool, []RunListInclude, error) {
+	includeOutput := legacyOutput
+	var include []RunListInclude
+	for _, value := range values {
+		parsed, err := selector.Parse(value)
+		if err != nil {
+			return false, nil, err
+		}
+		if parsed == outputValue {
+			includeOutput = true
+			continue
+		}
+		providerInclude, ok := providerIncludes[parsed]
+		if !ok {
+			return false, nil, fmt.Errorf("unsupported include value %q", value)
+		}
+		include = append(include, providerInclude)
+	}
+	return includeOutput, include, nil
 }
 
 func listRunsPageOpts(cursor string, requestedLimit int32) (string, int, error) {
@@ -380,6 +485,7 @@ func runsPage(runs []*RunListItem, limit int, hasMore bool) *apiv2.Page {
 		Limit:   int32(limit),
 	}
 	if hasMore && len(runs) > 0 {
+		// OSS pagination continues from the last returned matching run.
 		nextCursor := runs[len(runs)-1].Cursor
 		page.Cursor = &nextCursor
 	}
@@ -397,20 +503,24 @@ func optionalTimestamp(ts *timestamppb.Timestamp, field string) (*time.Time, err
 	return &value, nil
 }
 
-func runStatusesFromAPI(statuses []string) ([]enums.RunStatus, error) {
-	result := make([]enums.RunStatus, 0, len(statuses))
+func runStatusesFromAPI(statuses []string) ([]apiv2.FunctionRunStatus, error) {
+	result := make([]apiv2.FunctionRunStatus, 0, len(statuses))
 	for _, status := range statuses {
 		switch strings.ToUpper(strings.TrimSpace(status)) {
 		case "QUEUED":
-			result = append(result, enums.RunStatusScheduled)
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED)
 		case "RUNNING":
-			result = append(result, enums.RunStatusRunning)
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING)
+		case "PAUSED":
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED)
 		case "COMPLETED":
-			result = append(result, enums.RunStatusCompleted)
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED)
 		case "FAILED":
-			result = append(result, enums.RunStatusFailed)
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_FAILED)
 		case "CANCELLED":
-			result = append(result, enums.RunStatusCancelled)
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_CANCELLED)
+		case "SKIPPED":
+			result = append(result, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_SKIPPED)
 		default:
 			return nil, fmt.Errorf("Status is invalid")
 		}
@@ -470,13 +580,23 @@ func (s *Service) GetFunctionTrace(ctx context.Context, req *apiv2.GetFunctionTr
 	if err != nil {
 		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, "Run ID must be a valid ULID")
 	}
+	includeOutput, _, err := runIncludesFromAPI(
+		getFunctionTraceIncludeSelector,
+		req.GetIncludeOutput(),
+		req.GetInclude(),
+		GetFunctionTraceIncludeOutput,
+		nil,
+	)
+	if err != nil {
+		return nil, s.base.NewError(http.StatusBadRequest, apiv2base.ErrorInvalidFieldFormat, err.Error())
+	}
 
 	rootSpan, err := s.traces.GetSpansByRunID(ctx, runID)
 	if err != nil {
 		return nil, s.base.NewError(http.StatusNotFound, apiv2base.ErrorNotFound, "Trace not found")
 	}
 
-	trace, err := toFunctionTrace(ctx, s.traces, rootSpan, req.GetIncludeOutput())
+	trace, err := toFunctionTrace(ctx, s.traces, rootSpan, includeOutput)
 	if err != nil {
 		return nil, s.base.NewError(http.StatusInternalServerError, apiv2base.ErrorInternalError, "Unable to build trace response")
 	}
@@ -500,7 +620,7 @@ func toFunctionRun(run *cqrs.FunctionRun, fn inngest.DeployedFunction) *apiv2.Fu
 		App: &apiv2.AppRef{
 			Id: appRefID(fn),
 		},
-		Status:    toFunctionRunStatus(run.Status),
+		Status:    toFunctionRunStatus(run.Status, !fn.PausedAt.IsZero() && fn.PausedAt.Before(time.Now())),
 		QueuedAt:  queuedAt,
 		StartedAt: startedAt,
 		Trigger: &apiv2.RunTrigger{
@@ -510,11 +630,11 @@ func toFunctionRun(run *cqrs.FunctionRun, fn inngest.DeployedFunction) *apiv2.Fu
 	}
 
 	if run.BatchID != nil {
-		result.Trigger.BatchId = optionalString(run.BatchID.String())
+		result.Trigger.BatchId = new(run.BatchID.String())
 	}
 
 	if run.Cron != nil {
-		result.Trigger.CronSchedule = optionalString(*run.Cron)
+		result.Trigger.CronSchedule = new(*run.Cron)
 	}
 
 	if run.EndedAt != nil {
@@ -527,8 +647,12 @@ func toFunctionRun(run *cqrs.FunctionRun, fn inngest.DeployedFunction) *apiv2.Fu
 }
 
 func toAPIRunListItem(run *RunListItem) *apiv2.FunctionRun {
-	queuedAt := timestamppb.New(ulid.Time(run.RunID.Time()))
-	startedAt := timestamppb.New(run.RunStartedAt)
+	queuedAt := run.QueuedAt
+	if queuedAt.IsZero() {
+		// queuedAt should match the timestamp encoded in the run ID. Cloud's
+		// run_list_rollup currently has a bug where it uses the earliest span instead.
+		queuedAt = ulid.Time(run.RunID.Time())
+	}
 
 	result := &apiv2.FunctionRun{
 		Id: run.RunID.String(),
@@ -539,27 +663,46 @@ func toAPIRunListItem(run *RunListItem) *apiv2.FunctionRun {
 		App: &apiv2.AppRef{
 			Id: run.AppID,
 		},
-		Status:    toFunctionRunStatus(run.Status),
-		QueuedAt:  queuedAt,
-		StartedAt: startedAt,
+		Status:   toFunctionRunStatus(run.Status, run.FunctionPaused),
+		QueuedAt: timestamppb.New(queuedAt),
 		Trigger: &apiv2.RunTrigger{
 			EventIds: []string{run.EventID.String()},
 			IsBatch:  run.BatchID != nil,
 		},
+		IsDeferred: run.IsDeferred,
+	}
+	if !run.RunStartedAt.IsZero() {
+		result.StartedAt = timestamppb.New(run.RunStartedAt)
+	}
+	if run.DeferredFrom != nil {
+		result.DeferredFrom = &apiv2.RunDeferredFrom{
+			FunctionSlug: run.DeferredFrom.FunctionSlug,
+		}
+		if run.DeferredFrom.FunctionName != "" {
+			result.DeferredFrom.FunctionName = new(run.DeferredFrom.FunctionName)
+		}
+	}
+	if run.FunctionSlug != "" {
+		result.Function.Slug = new(run.FunctionSlug)
+	}
+	if run.EventName != "" {
+		result.Trigger.EventName = new(run.EventName)
 	}
 
 	if run.BatchID != nil {
-		result.Trigger.BatchId = optionalString(run.BatchID.String())
+		result.Trigger.BatchId = new(run.BatchID.String())
 	}
 
 	if run.Cron != nil {
-		result.Trigger.CronSchedule = optionalString(*run.Cron)
+		result.Trigger.CronSchedule = new(*run.Cron)
 	}
 
 	if run.EndedAt != nil {
 		result.EndedAt = timestamppb.New(*run.EndedAt)
-		duration := uint64(run.EndedAt.Sub(run.RunStartedAt) / time.Millisecond)
-		result.DurationMs = &duration
+		if !run.RunStartedAt.IsZero() {
+			duration := uint64(run.EndedAt.Sub(run.RunStartedAt) / time.Millisecond)
+			result.DurationMs = &duration
+		}
 	}
 
 	if len(run.Output) > 0 {
@@ -580,7 +723,7 @@ func appRefID(fn inngest.DeployedFunction) string {
 	return fn.AppID.String()
 }
 
-func toFunctionRunStatus(status enums.RunStatus) apiv2.FunctionRunStatus {
+func toFunctionRunStatus(status enums.RunStatus, functionPaused bool) apiv2.FunctionRunStatus {
 	switch status {
 	case enums.RunStatusCompleted:
 		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED
@@ -589,7 +732,15 @@ func toFunctionRunStatus(status enums.RunStatus) apiv2.FunctionRunStatus {
 	case enums.RunStatusCancelled:
 		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_CANCELLED
 	case enums.RunStatusRunning:
+		// paused is currently not stored on the run directly, so we must infer it from the function state
+		if functionPaused {
+			return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED
+		}
 		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING
+	case enums.RunStatusSkipped:
+		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_SKIPPED
+	case enums.RunStatusUnknown:
+		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_UNKNOWN
 	default:
 		return apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED
 	}
@@ -626,12 +777,8 @@ func jsonToStruct(raw json.RawMessage) *structpb.Struct {
 	}
 }
 
-func optionalString(value string) *string {
-	return &value
-}
-
 func toFunctionTrace(ctx context.Context, reader FunctionTraceReader, root *cqrs.OtelSpan, includeOutput bool) (*apiv2.FunctionTrace, error) {
-	span, err := loader.ConvertRunSpan(ctx, root)
+	span, err := loader.ConvertRunSpanFor(ctx, reader, root)
 	if err != nil {
 		return nil, err
 	}
@@ -664,6 +811,13 @@ func toTraceSpan(ctx context.Context, reader FunctionTraceReader, span *models.R
 	if span.StepID != nil && *span.StepID != "" {
 		result.StepId = span.StepID
 	}
+
+	if span.StepType != "" {
+		result.StepType = &span.StepType
+	}
+
+	result.GroupKind = span.GroupKind
+	result.Origin = span.Origin
 
 	if span.StartedAt != nil {
 		result.StartedAt = timestamppb.New(*span.StartedAt)
@@ -750,6 +904,7 @@ func toTraceSpanMetadata(metadata []*models.SpanMetadata) []*apiv2.TraceSpanMeta
 		result = append(result, &apiv2.TraceSpanMetadata{
 			Scope:     item.Scope.String(),
 			Kind:      item.Kind.String(),
+			IsUser:    item.IsUser,
 			Values:    toTraceSpanMetadataValues(item.Values),
 			UpdatedAt: timestamppb.New(item.UpdatedAt),
 		})

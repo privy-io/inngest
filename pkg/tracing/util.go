@@ -17,7 +17,6 @@ import (
 	"github.com/inngest/inngest/pkg/inngest"
 	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/util/aigateway"
-	"github.com/inngest/inngestgo"
 	"github.com/oklog/ulid/v2"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -93,7 +92,7 @@ func DriverResponseOutputAttrs(resp *state.DriverResponse) *meta.SerializableAtt
 	}
 
 	if resp.Retryable() {
-		meta.AddAttr(rawAttrs, meta.Attrs.Retryable, inngestgo.Ptr(true))
+		meta.AddAttr(rawAttrs, meta.Attrs.Retryable, new(true))
 	}
 
 	size := resp.OutputSize
@@ -154,7 +153,7 @@ func DriverResponseAttrs(
 	}
 
 	if resp.Retryable() {
-		meta.AddAttr(rawAttrs, meta.Attrs.Retryable, inngestgo.Ptr(true))
+		meta.AddAttr(rawAttrs, meta.Attrs.Retryable, new(true))
 	}
 
 	size := resp.OutputSize
@@ -201,9 +200,17 @@ func generatorAttrs(op *state.GeneratorOpcode) *meta.SerializableAttrs {
 		meta.Attr(meta.Attrs.StepName, &stepName),
 	)
 
-	// Try get stack line
-	if stack, err := op.StackLine(); err == nil && stack != nil && *stack != "" {
-		meta.AddAttr(rawAttrs, meta.Attrs.StepCodeLocation, stack)
+	var opts state.GenericOpts
+	if err := opts.UnmarshalAny(op.Opts); err == nil {
+		if opts.StackLine != "" {
+			meta.AddAttr(rawAttrs, meta.Attrs.StepCodeLocation, &opts.StackLine)
+		}
+		if len(opts.Span.Value) > 0 {
+			meta.AddAttr(rawAttrs, meta.Attrs.StepSpanPath, &opts.Span.Value)
+		}
+		if opts.Origin.Value != "" {
+			meta.AddAttr(rawAttrs, meta.Attrs.StepOrigin, &opts.Origin.Value)
+		}
 	}
 
 	// Always try to capture input
@@ -244,8 +251,14 @@ func generatorAttrs(op *state.GeneratorOpcode) *meta.SerializableAttrs {
 			if opts, err := op.InvokeFunctionOpts(); err == nil {
 				meta.AddAttr(rawAttrs, meta.Attrs.StepInvokeFunctionID, &opts.FunctionID)
 
-				if id, err := ulid.Parse(opts.Payload.ID); err == nil {
-					meta.AddAttr(rawAttrs, meta.Attrs.StepInvokeTriggerEventID, &id)
+				// opts.Payload is explicitly allowed to be nil —
+				// InvokeFunctionOpts.Validate() treats a nil Payload as
+				// valid, not an error — so it must be nil-checked before
+				// dereferencing .ID.
+				if opts.Payload != nil {
+					if id, err := ulid.Parse(opts.Payload.ID); err == nil {
+						meta.AddAttr(rawAttrs, meta.Attrs.StepInvokeTriggerEventID, &id)
+					}
 				}
 
 				if expiry, err := opts.Expires(); err == nil {
@@ -581,7 +594,11 @@ func DeferSpanRef(parentRunID ulid.ULID, hashedID string) *meta.SpanReference {
 	}
 }
 
-func spanContextFromMetadata(m *meta.SpanReference) trace.SpanContext {
+// SpanContextFromMetadata builds a trace.SpanContext from a SpanReference's
+// W3C traceparent/tracestate. Exported for pkg/tracing/v3, a second
+// TracerProvider implementation that can't reach this package's other
+// unexported helpers — see its doc comment.
+func SpanContextFromMetadata(m *meta.SpanReference) trace.SpanContext {
 	if m == nil {
 		return trace.SpanContext{}
 	}

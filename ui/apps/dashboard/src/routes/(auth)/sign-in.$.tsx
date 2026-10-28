@@ -5,10 +5,11 @@ import SignInRedirectErrors, {
 import SplitView from '@/components/SignIn/SplitView';
 import { validateRedirectUrlSearch } from '@/lib/deepLinkUtils';
 import { canonicalLink } from '@/utils/urls';
+import { useSignupMetadata } from '@/utils/useSignupMetadata';
 import { SignIn } from '@clerk/tanstack-react-start';
 import { Alert } from '@inngest/components/Alert';
+import { InngestLogo } from '@inngest/components/icons/logos/InngestLogo';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
-import logoImageUrl from '@inngest/components/icons/logos/inngest-logo-black.png';
 
 type SignInSearchParams = ReturnType<typeof validateRedirectUrlSearch> & {
   error?: string;
@@ -31,6 +32,7 @@ function RouteComponent() {
   const { error } = Route.useSearch();
   const location = useLocation();
   const isRedirect = !location.pathname.startsWith('/sign-in');
+  const signupMetadata = useSignupMetadata();
 
   return (
     <SplitView>
@@ -40,18 +42,21 @@ function RouteComponent() {
             <LoadingIcon />
           </div>
         ) : (
-          <SignIn
-            appearance={{
-              layout: {
-                logoImageUrl,
-              },
-              elements: {
-                footer: 'bg-none',
-                logoBox: 'flex m-0 justify-center',
-                logoImage: 'max-h-16 w-auto object-contain dark:invert',
-              },
-            }}
-          />
+          <div className="flex flex-col items-center">
+            {/* Matches sign-up: the mark is rendered here rather than through
+                Clerk's `logoImageUrl`, so it inherits `currentColor` instead
+                of relying on a dark-mode filter over a PNG. */}
+            <InngestLogo className="text-basis mb-8" width={132} />
+            <SignIn
+              unsafeMetadata={signupMetadata}
+              appearance={{
+                elements: {
+                  footer: 'bg-none',
+                  logoBox: 'hidden',
+                },
+              }}
+            />
+          </div>
         )}
         {typeof error === 'string' && (
           <Alert severity="error" className="mx-auto max-w-xs">

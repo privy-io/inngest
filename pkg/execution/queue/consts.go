@@ -5,9 +5,14 @@ import (
 )
 
 const (
-	PartitionSelectionMax = int64(100)
-	PartitionPeekMax      = PartitionSelectionMax * 3
-	AccountPeekMax        = int64(30)
+	// PartitionSelectionMax caps the partitions returned by each sequential Redis
+	// partition peek. A higher peek limit still increases the fetch, decode, and
+	// paused-function checks performed before truncating the result to this cap.
+	// Non-sequential peeks return all eligible partitions from the peek window.
+	PartitionSelectionMax    = int64(100)
+	PartitionPeekMax         = PartitionSelectionMax * 3
+	AbsolutePartitionPeekMax = int64(1500)
+	AccountPeekMax           = int64(30)
 
 	// PartitionLeaseDuration dictates how long a worker holds the lease for
 	// a partition.  This gives the worker a right to scan all queue items
@@ -37,7 +42,7 @@ const (
 	// NOTE: This is the maximum latency introduced into concurrnecy limited partitions in the
 	//       worst case.
 	PartitionConcurrencyLimitRequeueExtension = 5 * time.Second
-	PartitionSemaphoreLimitRequeueExtension   = 1 * time.Second
+	PartitionSemaphoreLimitRequeueExtension   = 3 * time.Second
 	PartitionThrottleLimitRequeueExtension    = 1 * time.Second
 	PartitionPausedRequeueExtension           = 5 * time.Minute
 	PartitionDeletedAccountRequeueExtension   = 7 * 24 * time.Hour

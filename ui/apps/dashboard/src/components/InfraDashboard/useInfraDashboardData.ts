@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getTimestampDaysAgo } from '@inngest/components/utils/date';
 import { useClient, useQuery } from 'urql';
 
-import { useEnvironment } from '@/components/Environments/environment-context';
 import {
-  latestMetricDataValue,
-  sumScopedMetricData,
-} from '@/components/Metrics/metricAggregation';
+  displayPlanName,
+  pickSelfServePlans,
+  type SelfServePlan,
+} from '@/components/Billing/Plans/utils';
+import { useEnvironment } from '@/components/Environments/environment-context';
+import { latestMetricDataValue } from '@/components/Metrics/metricAggregation';
 import { graphql } from '@/gql';
 import {
   GetBillableExecutionsDocument,
   GetCurrentPlanDocument,
   GetFunctionsDocument,
   GetFunctionsUsageDocument,
-  GetPlansDocument,
   MetricsLookupsDocument,
   MetricsScope,
   VolumeMetricsDocument,
@@ -27,7 +29,6 @@ import {
   latestMetricTotal,
   mergeBillingPlanIntoInfraPlans,
   isEnterprisePlanName,
-  pickCheapestEnabledProPlanAmount,
   pickInfraConcurrencyAddon,
   sumDataValues,
   sumMetricValues,
@@ -44,7 +45,7 @@ export const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
 ];
 
 const cacheTTL = 60 * 60 * 1000;
-const cacheVersion = 3;
+const cacheVersion = 5;
 const functionCountPageSize = 1;
 const topFunctionsUsagePageSize = 1000;
 const topFunctionsLimit = 50;
@@ -68,12 +69,13 @@ type InfraDashboardData = {
   executionsRan: number;
   functionsCount: number;
   functionsRan: number;
+  hobbyPlan: SelfServePlan | null;
   infraPlans: ReturnType<typeof mergeBillingPlanIntoInfraPlans>['plans'];
   hasPaymentMethod: boolean;
   isEnterprisePlan: boolean;
   planName: string;
   placeholders: typeof INFRA_DASHBOARD_PLACEHOLDERS;
-  proPlanAmountCents: number | null;
+  proPlan: SelfServePlan | null;
   sdkRequests: number;
   stepRunning: number;
   topFunctions: ReturnType<typeof buildTopFunctionRows>;
@@ -103,6 +105,33 @@ const InfraDashboardEventsCountDocument = graphql(`
         }
       ) {
         totalCount
+      }
+    }
+  }
+`);
+
+const InfraDashboardConcurrencyLimitDocument = graphql(`
+  query InfraDashboardConcurrencyLimit(
+    $envID: ID!
+    $from: Time!
+    $until: Time
+  ) {
+    workspace(id: $envID) {
+      concurrencyLimitReached: scopedMetrics(
+        filter: {
+          name: "concurrency_limit_reached_total"
+          scope: FN
+          from: $from
+          until: $until
+        }
+      ) {
+        metrics {
+          id
+          data {
+            bucket
+            value
+          }
+        }
       }
     }
   }
@@ -170,7 +199,10 @@ function writeCache(
   }
 }
 
-export function useInfraDashboardData(timeRange: TimeRangeOption) {
+export function useInfraDashboardData(
+  timeRange: TimeRangeOption,
+  availablePlans: SelfServePlan[],
+) {
   const env = useEnvironment();
   const client = useClient();
   const range = useMemo(() => getUtcMonthToDateRange(), [timeRange.id]);
@@ -192,6 +224,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
   const [functions] = useQuery({
     query: GetFunctionsDocument,
     variables: {
+      appIDs: null,
       archived: false,
       environmentID: env.id,
       page: 1,
@@ -207,6 +240,18 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
       environmentID: env.id,
       page: 1,
       pageSize: topFunctionsUsagePageSize,
+    },
+  });
+
+  const [functionConcurrencyLimit] = useQuery({
+    query: InfraDashboardConcurrencyLimitDocument,
+    variables: {
+      envID: env.id,
+      from: getTimestampDaysAgo({
+        currentDate: range.until,
+        days: 1,
+      }).toISOString(),
+      until: range.until.toISOString(),
     },
   });
 
@@ -242,9 +287,6 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
   const [currentPlan, refetchCurrentPlan] = useQuery({
     query: GetCurrentPlanDocument,
   });
-  const [availablePlans, refetchAvailablePlans] = useQuery({
-    query: GetPlansDocument,
-  });
 
   const liveData = useMemo<InfraDashboardData>(() => {
     const activeApps =
@@ -266,19 +308,16 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
     const backlogDepth = latestBucketMetricTotal(
       volume.data?.workspace.backlog.metrics,
     );
-    const accountConcurrency = sumScopedMetricData(
-      volume.data?.workspace.stepRunning.metrics,
-    );
+    const accountConcurrency = volume.data?.accountConcurrency.data ?? [];
     const currentConcurrency = latestMetricDataValue(accountConcurrency);
-    const proPlanAmountCents = pickCheapestEnabledProPlanAmount(
-      availablePlans.data?.plans,
-    );
+    const selfServePlans = pickSelfServePlans(availablePlans);
     const billingPlan = mergeBillingPlanIntoInfraPlans({
       accountEntitlements: currentPlan.data?.account.entitlements,
       defaultSku: INFRA_DASHBOARD_PLACEHOLDERS.defaultPlanSku,
+      hobbyPlan: selfServePlans.hobby,
       plan: currentPlan.data?.account.plan,
       plans: INFRA_DASHBOARD_PLACEHOLDERS.infraPlans,
-      proPlanAmountCents,
+      proPlan: selfServePlans.pro,
     });
     const billingPlanReady = Boolean(
       !currentPlan.fetching &&
@@ -311,6 +350,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
         lookups.data?.envBySlug?.workflows.data.length ??
         0,
       functionsRan: functionsRan || runsEnded,
+      hobbyPlan: selfServePlans.hobby,
       infraPlans: billingPlan.plans,
       hasPaymentMethod: Boolean(
         currentPlan.data?.account.paymentMethods?.length,
@@ -318,14 +358,17 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
       isEnterprisePlan: isEnterprisePlanName(
         currentPlan.data?.account.plan?.name,
       ),
-      planName: currentPlan.data?.account.plan?.name ?? 'Plan',
+      planName: displayPlanName(currentPlan.data?.account.plan?.name ?? 'Plan'),
       placeholders: INFRA_DASHBOARD_PLACEHOLDERS,
-      proPlanAmountCents,
+      proPlan: selfServePlans.pro,
       sdkRequests:
         sumMetricValues(volume.data?.workspace.sdkThroughputStarted.metrics) ||
         sumMetricValues(volume.data?.workspace.sdkThroughputEnded.metrics),
       stepRunning: currentConcurrency,
       topFunctions: buildTopFunctionRows({
+        concurrency:
+          functionConcurrencyLimit.data?.workspace.concurrencyLimitReached
+            .metrics,
         limit: topFunctionsLimit,
         usage: usageRows,
       }),
@@ -338,7 +381,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
       totalAccountConcurrency: sumDataValues(accountConcurrency),
     };
   }, [
-    availablePlans.data?.plans,
+    availablePlans,
     billableExecutions.data?.usage,
     currentPlan.data?.account.addons?.concurrency,
     currentPlan.data?.account.entitlements,
@@ -348,6 +391,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
     currentPlan.data?.account.plan?.name,
     currentPlan.fetching,
     events.data?.environment.eventsV2.totalCount,
+    functionConcurrencyLimit.data?.workspace.concurrencyLimitReached.metrics,
     functionUsage.data?.workspace.workflows.data,
     functions.data?.workspace.workflows.page,
     lookups.data?.envBySlug?.apps,
@@ -357,7 +401,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
     volume.data?.workspace.sdkThroughputEnded.metrics,
     volume.data?.workspace.sdkThroughputStarted.metrics,
     volume.data?.workspace.stepThroughput.metrics,
-    volume.data?.workspace.stepRunning.metrics,
+    volume.data?.accountConcurrency.data,
     volume.data?.workspace.workerPercentageUsed.metrics,
     volume.data?.workspace.workerTotalCapacity.metrics,
   ]);
@@ -366,29 +410,28 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
     lookups.data &&
       functions.data &&
       functionUsage.data &&
+      functionConcurrencyLimit.data &&
       events.data &&
       volume.data &&
       billableExecutions.data &&
       currentPlan.data &&
-      availablePlans.data &&
       !lookups.fetching &&
       !functions.fetching &&
       !functionUsage.fetching &&
       !events.fetching &&
       !volume.fetching &&
       !billableExecutions.fetching &&
-      !currentPlan.fetching &&
-      !availablePlans.fetching,
+      !currentPlan.fetching,
   );
   const liveError =
     lookups.error ||
     functions.error ||
     functionUsage.error ||
+    functionConcurrencyLimit.error ||
     events.error ||
     volume.error ||
     billableExecutions.error ||
-    currentPlan.error ||
-    availablePlans.error;
+    currentPlan.error;
   const isUsingCachedData = Boolean(cached && !liveDataReady);
   const data = isUsingCachedData && cached ? cached.data : liveData;
   const fetching =
@@ -396,10 +439,10 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
     (lookups.fetching ||
       functions.fetching ||
       functionUsage.fetching ||
+      functionConcurrencyLimit.fetching ||
       volume.fetching ||
       billableExecutions.fetching ||
-      currentPlan.fetching ||
-      availablePlans.fetching);
+      currentPlan.fetching);
   const loading = isUsingCachedData
     ? {
         backlog: false,
@@ -412,14 +455,15 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
       }
     : {
         backlog: volume.fetching,
-        billing: currentPlan.fetching || availablePlans.fetching,
+        billing: currentPlan.fetching,
         eventsReceived: events.fetching,
         executionsRan:
           billableExecutions.fetching ||
           (!billableExecutions.data?.usage && volume.fetching),
         executors: volume.fetching,
         queue: volume.fetching,
-        topFunctions: functionUsage.fetching,
+        topFunctions:
+          functionUsage.fetching || functionConcurrencyLimit.fetching,
       };
 
   useEffect(() => {
@@ -450,11 +494,7 @@ export function useInfraDashboardData(timeRange: TimeRangeOption) {
       await client
         .query(GetCurrentPlanDocument, {}, { requestPolicy: 'network-only' })
         .toPromise();
-      await client
-        .query(GetPlansDocument, {}, { requestPolicy: 'network-only' })
-        .toPromise();
       refetchCurrentPlan({ requestPolicy: 'network-only' });
-      refetchAvailablePlans({ requestPolicy: 'network-only' });
     },
   };
 }

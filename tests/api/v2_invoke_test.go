@@ -61,7 +61,7 @@ func TestV2InvokeFunction(t *testing.T) {
 		inngestClient,
 		inngestgo.FunctionOpts{
 			ID:      fnID,
-			Retries: inngestgo.IntPtr(0),
+			Retries: new(0),
 		},
 		inngestgo.EventTrigger("none", nil),
 		func(ctx context.Context, input inngestgo.Input[any]) (any, error) {
@@ -95,8 +95,7 @@ func TestV2InvokeFunction(t *testing.T) {
 	// Verify the function actually ran to completion
 	runID := result.Data.RunID
 	c.WaitForRunTraces(ctx, t, &runID, client.WaitForRunTracesOptions{
-		Status:    models.FunctionStatusCompleted,
-		NewTraces: true,
+		Status: models.FunctionStatusCompleted,
 	})
 }
 
@@ -113,7 +112,7 @@ func TestV2InvokeFunctionIdempotency(t *testing.T) {
 		inngestClient,
 		inngestgo.FunctionOpts{
 			ID:      fnID,
-			Retries: inngestgo.IntPtr(0),
+			Retries: new(0),
 		},
 		inngestgo.EventTrigger("none", nil),
 		func(ctx context.Context, input inngestgo.Input[any]) (any, error) {

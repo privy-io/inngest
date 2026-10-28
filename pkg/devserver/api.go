@@ -168,6 +168,13 @@ func (a devapi) Info(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("enable-step-metadata") == "" {
 		features["enable-step-metadata"] = true
 	}
+	// Not user-toggleable: reflects whether --duckdb dual-write actually
+	// started, which is what gates the insights GQL field.
+	features["duckdb-insights"] = a.devserver.DuckDB != nil
+	// Also not user-toggleable: whether runs/events are actually read from
+	// DuckDB (--duckdb-reads on top of a started dual-write), which is what
+	// gates CEL event search.
+	features["duckdb-reads"] = a.devserver.DuckDB != nil && a.devserver.Opts.EnableDuckDBReads
 
 	//
 	// inngest feature flags are a map of arbitrary key value
@@ -280,6 +287,7 @@ func (a devapi) register(ctx context.Context, r sdk.RegisterRequest) (*sync.Repl
 			Valid:  r.Framework != "",
 		},
 		Url:        r.URL,
+		Metadata:   registration.AppMetadataForRegisterRequest(r),
 		Checksum:   sum,
 		Method:     method.String(),
 		AppVersion: r.AppVersion,
@@ -353,6 +361,12 @@ func (a devapi) register(ctx context.Context, r sdk.RegisterRequest) (*sync.Repl
 
 	if app, err := a.devserver.Data.GetAppByChecksum(ctx, consts.DevServerEnvID, sum); err == nil {
 		if !app.Error.Valid {
+			if r.FeatureObservations != nil && r.FeatureObservations.HasAny() {
+				if _, err := a.devserver.Data.UpsertAppByName(ctx, appParams); err != nil {
+					return nil, publicerr.Wrap(err, 500, "Error updating app observations")
+				}
+			}
+
 			// Skip registration since the app was already successfully
 			// registered.
 			return &sync.Reply{

@@ -11,7 +11,9 @@ import (
 	"github.com/inngest/inngest/pkg/event"
 	"github.com/inngest/inngest/pkg/execution"
 	sv2 "github.com/inngest/inngest/pkg/execution/state/v2"
+	"github.com/inngest/inngest/pkg/inngest"
 	"github.com/inngest/inngest/pkg/tracing/metadata"
+	v2pb "github.com/inngest/inngest/proto/gen/api/v2"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -83,6 +85,14 @@ type EventPublisher interface {
 	Publish(ctx context.Context, event event.TrackedEvent) error
 }
 
+type EventSender func(context.Context, *event.Event) (string, error)
+
+type FunctionPauser interface {
+	// idempotent pause and resume; may apply asynchronously
+	PauseFunction(context.Context, inngest.DeployedFunction) (inngest.DeployedFunction, error)
+	ResumeFunction(context.Context, inngest.DeployedFunction) (inngest.DeployedFunction, error)
+}
+
 type GetRunOpts struct {
 	IncludeOutput bool
 }
@@ -95,12 +105,21 @@ type GetRunsOpts struct {
 	From          *time.Time
 	Until         *time.Time
 	TimeField     RunTimeField
-	Status        []enums.RunStatus
+	Status        []v2pb.FunctionRunStatus
 	AppIDs        []string
 	FunctionIDs   []string
 	IsDeferred    *bool
 	Order         OrderDirection
+	CEL           string
+	Include       []RunListInclude
 }
+
+// RunListInclude is an expansion understood by the run provider.
+type RunListInclude uint8
+
+const (
+	RunListIncludeDeferredFrom RunListInclude = iota + 1
+)
 
 type RunTimeField int
 
@@ -120,6 +139,7 @@ const (
 type RunListItem struct {
 	RunID        ulid.ULID
 	Cursor       string
+	QueuedAt     time.Time
 	RunStartedAt time.Time
 	EventID      ulid.ULID
 	BatchID      *ulid.ULID
@@ -130,12 +150,49 @@ type RunListItem struct {
 
 	FunctionID   string
 	FunctionName string
-	AppID        string
+	FunctionSlug string
+	// FunctionPaused carries function state that is not stored on the run itself.
+	FunctionPaused bool
+	AppID          string
+	EventName      string
+	IsDeferred     *bool
+	DeferredFrom   *RunDeferredFrom
+}
+
+// RunDeferredFrom intentionally omits parent run IDs. No run-list consumer
+// uses them, and the underlying linkage can contain multiple IDs, so including
+// them would make the expansion size depend on linkage count. Add them here
+// when a run-list consumer needs them.
+type RunDeferredFrom struct {
+	FunctionSlug string
+	FunctionName string
 }
 
 type GetRunsResult struct {
 	Runs    []*RunListItem
+	Cursor  string
 	HasMore bool
+}
+
+type CreateReplayOpts struct {
+	AppID      string
+	Name       string
+	FunctionID string
+	From       time.Time
+	Until      time.Time
+	Statuses   []enums.ReplayRunStatus
+}
+
+type ReplayResult struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+}
+
+type ReplayProvider interface {
+	// CreateReplay starts a replay for one function in the authenticated environment.
+	// Cloud uses the existing function replay worker. Local work is asynchronous,
+	// in memory, and lost on restart. Retrying creation creates another replay.
+	CreateReplay(ctx context.Context, opts CreateReplayOpts) (ReplayResult, error)
 }
 
 type RunProvider interface {

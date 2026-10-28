@@ -9,16 +9,26 @@ INSERT INTO apps (id, name, sdk_language, sdk_version, framework, metadata, stat
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = CASE WHEN excluded.name = '' THEN apps.name ELSE excluded.name END,
-    sdk_language = excluded.sdk_language,
-    sdk_version = excluded.sdk_version,
-    framework = excluded.framework,
-    metadata = excluded.metadata,
-    status = excluded.status,
-    error = excluded.error,
-    checksum = excluded.checksum,
+    -- Placeholder (name='') hitting an active named row must not blank the
+    -- registration. The checksum short-circuit then returns without writing
+    -- these columns back. An archived row takes the incoming values; error
+    -- and checksum below also drop so revival cannot short-circuit.
+    sdk_language = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.sdk_language ELSE excluded.sdk_language END,
+    sdk_version  = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.sdk_version ELSE excluded.sdk_version END,
+    framework    = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.framework ELSE excluded.framework END,
+    metadata     = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.metadata ELSE excluded.metadata END,
+    status       = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.status ELSE excluded.status END,
+    error = CASE
+      WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.error
+      ELSE excluded.error
+    END,
+    checksum = CASE
+      WHEN excluded.checksum = '' AND apps.archived_at IS NULL THEN apps.checksum
+      ELSE excluded.checksum
+    END,
     archived_at = NULL,
-    "method" = excluded.method,
-    app_version = excluded.app_version,
+    "method" = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.method ELSE excluded.method END,
+    app_version = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.app_version ELSE excluded.app_version END,
     url = excluded.url
 RETURNING *;
 
@@ -116,6 +126,14 @@ SELECT functions.*
 FROM functions
 JOIN apps ON apps.id = functions.app_id
 WHERE functions.archived_at IS NULL
+AND apps.archived_at IS NULL;
+
+-- name: GetFunctionsBySlugs :many
+SELECT functions.*
+FROM functions
+JOIN apps ON apps.id = functions.app_id
+WHERE functions.slug IN (sqlc.slice('slugs'))
+AND functions.archived_at IS NULL
 AND apps.archived_at IS NULL;
 
 -- name: GetAppFunctions :many
@@ -479,54 +497,6 @@ WHERE run_id = ?
 GROUP BY run_id, trace_id, dynamic_span_id, parent_span_id
 ORDER BY start_time;
 
--- name: GetSpansByDebugRunID :many
-SELECT
-  trace_id,
-  run_id,
-  debug_session_id,
-  dynamic_span_id,
-  MIN(start_time) as start_time,
-  MAX(end_time) AS end_time,
-  parent_span_id,
-  json_group_array(json_object(
-    'span_id', span_id,
-    'start_time', start_time,
-    'end_time', end_time,
-    'name', name,
-    'attributes', attributes,
-    'links', links,
-    'output_span_id', CASE WHEN output IS NOT NULL THEN span_id ELSE NULL END,
-    'input_span_id', CASE WHEN input IS NOT NULL THEN span_id ELSE NULL END
-  )) AS span_fragments
-FROM spans
-WHERE debug_run_id = ?
-GROUP BY trace_id, run_id, debug_session_id, dynamic_span_id, parent_span_id
-ORDER BY start_time;
-
--- name: GetSpansByDebugSessionID :many
-SELECT
-  trace_id,
-  run_id,
-  debug_run_id,
-  dynamic_span_id,
-  MIN(start_time) as start_time,
-  MAX(end_time) AS end_time,
-  parent_span_id,
-  json_group_array(json_object(
-    'span_id', span_id,
-    'start_time', start_time,
-    'end_time', end_time,
-    'name', name,
-    'attributes', attributes,
-    'links', links,
-    'output_span_id', CASE WHEN output IS NOT NULL THEN span_id ELSE NULL END,
-    'input_span_id', CASE WHEN input IS NOT NULL THEN span_id ELSE NULL END
-  )) AS span_fragments
-FROM spans
-WHERE debug_session_id = ?
-GROUP BY trace_id, run_id, debug_run_id, dynamic_span_id, parent_span_id
-ORDER BY start_time;
-
 -- name: GetSpanOutput :many
 SELECT
   COALESCE(CAST(input AS TEXT), '') AS input,
@@ -728,7 +698,7 @@ SELECT
     'input_span_id', CASE WHEN s.input IS NOT NULL THEN s.span_id ELSE NULL END
   )) AS span_fragments
 FROM spans AS s
-JOIN spans AS m ON m.dynamic_span_id = s.dynamic_span_id
+JOIN spans AS m ON m.dynamic_span_id = s.dynamic_span_id AND m.run_id = s.run_id
 WHERE m.name = ?
   AND m.run_id IN (sqlc.slice('run_ids'))
 GROUP BY s.run_id, s.trace_id, s.dynamic_span_id, s.parent_span_id

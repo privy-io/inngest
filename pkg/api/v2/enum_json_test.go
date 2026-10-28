@@ -33,6 +33,15 @@ func TestResponseEnumMarshalerShortensAPIEnumPrefixes(t *testing.T) {
 	run := body["data"].(map[string]any)
 	require.Equal(t, "COMPLETED", run["status"])
 	require.Equal(t, "FUNCTION_RUN_STATUS_FAILED", run["output"].(map[string]any)["literal"])
+
+	data, err = marshaler.Marshal(&apiv2.GetFunctionRunResponse{
+		Data: &apiv2.FunctionRun{
+			Id:     "run-id",
+			Status: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_UNKNOWN,
+		},
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"id":"run-id","status":"UNKNOWN"}}`, string(data))
 }
 
 func TestResponseEnumMarshalerShortensTraceEnumPrefixes(t *testing.T) {
@@ -78,6 +87,26 @@ func TestResponseEnumMarshalerLeavesNonProtoValuesUnchanged(t *testing.T) {
 	var body map[string]string
 	require.NoError(t, json.Unmarshal(data, &body))
 	require.Equal(t, "FUNCTION_RUN_STATUS_COMPLETED", body["status"])
+}
+
+func TestResponseEnumMarshalerShortensStreamResults(t *testing.T) {
+	marshaler := newResponseEnumMarshaler()
+	response := &apiv2.StreamSandboxLogsResponse{
+		Data: &apiv2.SandboxLogChunk{Stream: apiv2.SandboxLogStream_SANDBOX_LOG_STREAM_STDOUT},
+	}
+	data, err := marshaler.Marshal(map[string]any{"result": response})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"result":{"data":{"stream":"STDOUT"}}}`, string(data))
+	require.Equal(t, "application/x-ndjson", marshaler.(interface{ StreamContentType(any) string }).StreamContentType(response))
+}
+
+func TestResponseEnumMarshalerShortensSandboxSnapshotStatus(t *testing.T) {
+	marshaler := newResponseEnumMarshaler()
+	data, err := marshaler.Marshal(&apiv2.GetSandboxSnapshotResponse{
+		Data: &apiv2.SandboxSnapshot{Status: apiv2.SandboxSnapshotStatus_SANDBOX_SNAPSHOT_STATUS_READY},
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"status":"READY"}}`, string(data))
 }
 
 func TestResponseEnumMarshalerReturnsMarshalErrors(t *testing.T) {

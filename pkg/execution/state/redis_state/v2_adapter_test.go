@@ -98,7 +98,7 @@ func TestV2Adapter(t *testing.T) {
 					RequestVersion:  1,
 					HasAI:           true,
 					ForceStepPlan:   true,
-					PriorityFactor:  int64Ptr(100),
+					PriorityFactor:  new(int64(100)),
 					CustomConcurrencyKeys: []statev2.CustomConcurrency{
 						{
 							Key:   "f:" + functionID.String() + ":user-123",
@@ -439,7 +439,7 @@ func TestV2Adapter(t *testing.T) {
 			assert.ErrorIs(t, err2, state.ErrDuplicateResponse)
 		})
 
-		t.Run("SaveStep with same data succeeds (idempotent)", func(t *testing.T) {
+		t.Run("SaveStep with same data returns ErrIdempotentResponse", func(t *testing.T) {
 			idempotentRunID := ulid.MustNew(ulid.Now(), rand.Reader)
 			idempotentKey := fmt.Sprintf("idempotent-key-%s", idempotentRunID.String())
 
@@ -476,9 +476,53 @@ func TestV2Adapter(t *testing.T) {
 			_, err1 := v2svc.SaveStep(ctx, createdState.Metadata.ID, stepID, stepData)
 			assert.NoError(t, err1)
 
-			// Save step second time with SAME data - should succeed (idempotent)
+			// Save step second time with SAME data - reports the unchanged re-save
 			_, err2 := v2svc.SaveStep(ctx, createdState.Metadata.ID, stepID, stepData)
-			assert.NoError(t, err2) // Should not error for idempotent responses
+			assert.ErrorIs(t, err2, statev2.ErrIdempotentResponse)
+		})
+
+		t.Run("SaveStep with same data reports accurate hasPending", func(t *testing.T) {
+			runID := ulid.MustNew(ulid.Now(), rand.Reader)
+			createdState, err := v2svc.Create(ctx, statev2.CreateState{
+				Metadata: statev2.Metadata{
+					ID: statev2.ID{
+						RunID:      runID,
+						FunctionID: functionID,
+						Tenant: statev2.Tenant{
+							AccountID: accountID,
+							EnvID:     workspaceID,
+							AppID:     appID,
+						},
+					},
+					Config: *statev2.InitConfig(&statev2.Config{
+						EventIDs:    []ulid.ULID{eventID},
+						Idempotency: fmt.Sprintf("idempotent-pending-key-%s", runID.String()),
+					}),
+				},
+				Events: []json.RawMessage{eventBytes},
+			})
+			require.NoError(t, err)
+			id := createdState.Metadata.ID
+
+			// Two parallel steps are pending.
+			require.NoError(t, v2svc.SavePending(ctx, id, []string{"step-a", "step-b"}))
+			dataA := json.RawMessage(`{"result": "a"}`)
+
+			hasPending, err := v2svc.SaveStep(ctx, id, "step-a", dataA)
+			require.NoError(t, err)
+			require.True(t, hasPending, "step-b is still pending")
+
+			hasPending, err = v2svc.SaveStep(ctx, id, "step-a", dataA)
+			require.ErrorIs(t, err, statev2.ErrIdempotentResponse)
+			require.True(t, hasPending, "idempotent re-save must still report step-b pending")
+
+			hasPending, err = v2svc.SaveStep(ctx, id, "step-b", json.RawMessage(`{"result": "b"}`))
+			require.NoError(t, err)
+			require.False(t, hasPending, "nothing is pending once step-b finishes")
+
+			hasPending, err = v2svc.SaveStep(ctx, id, "step-a", dataA)
+			require.ErrorIs(t, err, statev2.ErrIdempotentResponse)
+			require.False(t, hasPending, "idempotent re-save must report nothing pending")
 		})
 	})
 }
@@ -765,10 +809,6 @@ func TestV2AdapterWithDisabledRetries(t *testing.T) {
 	})
 }
 
-func int64Ptr(v int64) *int64 {
-	return &v
-}
-
 // mustV2Service spins up a miniredis, wires a sharded manager against it, and
 // returns the v2 RunService plus the miniredis handle for key inspection.
 func mustV2Service(t *testing.T, ctx context.Context) (statev2.RunService, *miniredis.Miniredis) {
@@ -839,6 +879,83 @@ func TestV2AdapterLoadMetadataPersistsSizeFields(t *testing.T) {
 	assert.Positive(t, md.Metrics.EventSize, "EventSize must be persisted (>0) after Create")
 	assert.Positive(t, md.Metrics.StateSize, "StateSize must be persisted (>0) after Create")
 	assert.Equal(t, 1, md.Metrics.StepCount, "StepCount must reflect memoized steps")
+}
+
+func TestV2AdapterScheduledAt(t *testing.T) {
+	scheduledAt := time.Now().Add(time.Hour).Truncate(time.Millisecond)
+
+	tests := []struct {
+		name        string
+		scheduledAt time.Time
+		// legacy removes the field from the metadata hash, as for state
+		// written before scheduled_at existed.
+		legacy   bool
+		expected time.Time
+	}{
+		{name: "set", scheduledAt: scheduledAt, expected: scheduledAt},
+		{name: "unset"},
+		{name: "legacy state without field", scheduledAt: scheduledAt, legacy: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			svc, mr := mustV2Service(t, ctx)
+
+			event, err := json.Marshal(map[string]any{"name": "scheduled.test"})
+			require.NoError(t, err)
+
+			id := statev2.ID{
+				RunID:      ulid.MustNew(ulid.Now(), rand.Reader),
+				FunctionID: uuid.New(),
+				Tenant: statev2.Tenant{
+					AccountID: uuid.New(),
+					EnvID:     uuid.New(),
+					AppID:     uuid.New(),
+				},
+			}
+			_, err = svc.Create(ctx, statev2.CreateState{
+				Metadata: statev2.Metadata{
+					ID: id,
+					Config: *statev2.InitConfig(&statev2.Config{
+						SpanID:      "scheduled-span",
+						Idempotency: "scheduled-" + id.RunID.String(),
+						ScheduledAt: tc.scheduledAt,
+					}),
+				},
+				Events: []json.RawMessage{event},
+			})
+			require.NoError(t, err)
+
+			if tc.legacy {
+				var removed int
+				for _, k := range mr.Keys() {
+					if strings.HasSuffix(k, ":metadata:"+id.RunID.String()) {
+						require.NotEmpty(t, mr.HGet(k, "schat"))
+						mr.HDel(k, "schat")
+						removed++
+					}
+				}
+				require.Equal(t, 1, removed, "expected to remove schat from the metadata hash")
+			}
+
+			md, err := svc.LoadMetadata(ctx, id)
+			require.NoError(t, err)
+			assert.True(t, tc.expected.Equal(md.Config.ScheduledAt), "expected %s, got %s", tc.expected, md.Config.ScheduledAt)
+			assert.Equal(t, tc.expected.IsZero(), md.Config.ScheduledAt.IsZero())
+
+			// Migrate must carry the field across clusters.
+			dstSvc, _ := mustV2Service(t, ctx)
+			require.NoError(t, dstSvc.Migrate(ctx, statev2.MigrateState{
+				Metadata: md,
+				Events:   []json.RawMessage{event},
+				Stack:    md.Stack,
+			}))
+			dstMD, err := dstSvc.LoadMetadata(ctx, id)
+			require.NoError(t, err)
+			assert.True(t, tc.expected.Equal(dstMD.Config.ScheduledAt), "expected %s, got %s", tc.expected, dstMD.Config.ScheduledAt)
+		})
+	}
 }
 
 func TestV2AdapterMigrate(t *testing.T) {
@@ -1007,6 +1124,36 @@ func TestV2AdapterLookupIdempotency(t *testing.T) {
 	require.NotNil(t, entry)
 	assert.Equal(t, id.RunID, entry.RunID)
 	assert.True(t, entry.IsTombstone)
+}
+
+func TestV2AdapterLookupIdempotencyCleansUpOldMarkerOnlyTombstone(t *testing.T) {
+	ctx := context.Background()
+	svc, redis := mustV2Service(t, ctx)
+	id := statev2.ID{
+		RunID:      ulid.MustNew(ulid.Now(), rand.Reader),
+		FunctionID: uuid.New(),
+		Tenant: statev2.Tenant{
+			AccountID: uuid.New(),
+			EnvID:     uuid.New(),
+			AppID:     uuid.New(),
+		},
+	}
+	key := "old-marker-only-tombstone"
+	redisKey := fmt.Sprintf("{estate:%s}:key:%s", id.Tenant.AccountID, key)
+	require.NoError(t, redis.Set(redisKey, string(consts.FunctionIdempotencyTombstone)))
+
+	entry, err := svc.LookupIdempotency(ctx, id, key)
+	require.NoError(t, err)
+	assert.Nil(t, entry)
+	assert.False(t, redis.Exists(redisKey))
+
+	require.NoError(t, redis.Set(redisKey, string(consts.FunctionIdempotencyTombstone)))
+	redis.SetTTL(redisKey, time.Hour)
+	entry, err = svc.LookupIdempotency(ctx, id, key)
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.True(t, entry.IsTombstone)
+	assert.True(t, redis.Exists(redisKey))
 }
 
 // recordingPauseDeleter counts DeletePausesForRun calls for verifying

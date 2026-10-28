@@ -7,8 +7,14 @@ import {
 } from '@inngest/components/DropdownMenu/DropdownMenu';
 import { useColumns as useFunctionColumns } from '@inngest/components/Functions/columns';
 import { AlertModal } from '@inngest/components/Modal/AlertModal';
+import ProgressBar from '@inngest/components/ProgressBar/ProgressBar';
 import { Skeleton } from '@inngest/components/Skeleton/Skeleton';
 import { Table } from '@inngest/components/Table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@inngest/components/Tooltip';
 import { cn } from '@inngest/components/utils/classNames';
 import {
   RiArrowDownSLine,
@@ -28,7 +34,13 @@ import CheckoutModal, {
   type CheckoutItem,
 } from '@/components/Billing/Plans/CheckoutModal';
 import ConfirmPlanChangeModal from '@/components/Billing/Plans/ConfirmPlanChangeModal';
+import type { SelfServePlan } from '@/components/Billing/Plans/utils';
 import { useEnvironment } from '@/components/Environments/environment-context';
+import {
+  usageKind,
+  type UsageKind,
+} from '@/components/ExecutionLimit/executionLimit';
+import { useExecutionLimit } from '@/components/ExecutionLimit/useExecutionLimit';
 import { UpdateAccountAddonQuantityDocument } from '@/gql/graphql';
 import { pathCreator } from '@/utils/urls';
 
@@ -66,16 +78,21 @@ function formatCacheAge(cachedAt: number) {
   return `${minutes}m`;
 }
 
-export function InfraDashboard() {
+export function InfraDashboard({
+  availablePlans,
+}: {
+  availablePlans: SelfServePlan[];
+}) {
   const env = useEnvironment();
   const { cacheStatus, data, loading, refetchBillingData } =
-    useInfraDashboardData(TIME_RANGE_OPTIONS[0]);
+    useInfraDashboardData(TIME_RANGE_OPTIONS[0], availablePlans);
   const cacheAge = cacheStatus.cachedAt
     ? formatCacheAge(cacheStatus.cachedAt)
     : null;
   const placeholders = data.placeholders;
   const billingDays = billingCycleDaysRemaining();
   const selectedPlan = data.currentInfraPlan;
+  const executionLimit = useExecutionLimit();
 
   return (
     <div className="bg-canvasBase min-h-full w-full px-4 pb-16 pt-4 lg:px-6">
@@ -102,10 +119,11 @@ export function InfraDashboard() {
             currentConcurrencyLimit={data.accountConcurrencyLimit}
             currentPlanSku={data.currentInfraPlanSku}
             hasPaymentMethod={data.hasPaymentMethod}
+            hobbyPlan={data.hobbyPlan}
             onBillingChange={refetchBillingData}
             isEnterprisePlan={data.isEnterprisePlan}
             plans={data.infraPlans}
-            proPlanAmountCents={data.proPlanAmountCents}
+            proPlan={data.proPlan}
             selectedPlan={selectedPlan}
           />
           <div className="text-muted flex w-full items-center justify-between gap-3 text-xs">
@@ -125,15 +143,28 @@ export function InfraDashboard() {
       </header>
 
       <section className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+        {executionLimit?.enhanced ? (
+          <KpiCard
+            cap={{
+              value: executionLimit.usage,
+              limit: executionLimit.limit,
+              kind: usageKind(executionLimit.band),
+            }}
+            fetching={false}
+            label="Executions ran (runs + steps)"
+            value={formatCompactNumber(executionLimit.usage)}
+          />
+        ) : (
+          <KpiCard
+            fetching={loading.executionsRan}
+            label="Executions ran (runs + steps)"
+            value={formatCompactNumber(data.executionsRan)}
+          />
+        )}
         <KpiCard
           fetching={loading.eventsReceived}
           label="Events received"
           value={formatCompactNumber(data.eventsReceived)}
-        />
-        <KpiCard
-          fetching={loading.executionsRan}
-          label="Executions ran (runs + steps)"
-          value={formatCompactNumber(data.executionsRan)}
         />
         <KpiCard
           fetching={loading.backlog}
@@ -183,19 +214,21 @@ export function InfraDashboard() {
   );
 }
 
+const capTicks = [50, 75, 90];
+
 function KpiCard({
+  cap,
   className,
   delta,
   fetching,
   label,
-  progress,
   value,
 }: {
+  cap?: { value: number; limit: number; kind: UsageKind };
   className?: string;
   delta?: string;
   fetching: boolean;
   label: string;
-  progress?: number;
   value: string;
 }) {
   return (
@@ -219,17 +252,42 @@ function KpiCard({
               {delta}
             </div>
           )}
+          {cap && (
+            <div className="text-muted mb-1 ml-auto text-xs">
+              /{formatCompactNumber(cap.limit)}
+            </div>
+          )}
         </div>
       )}
-      {typeof progress === 'number' && (
-        <div className="mt-3 flex items-center gap-3">
-          <div className="bg-canvasMuted h-1 w-full overflow-hidden rounded-full">
-            <div
-              className="bg-primary-moderate h-full rounded-full"
-              style={{ width: `${progress}%` }}
-            />
+      {cap && !fetching && (
+        <div className="mt-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <ProgressBar
+                  className="bg-canvasMuted"
+                  kind={cap.kind}
+                  limit={cap.limit}
+                  size="small"
+                  value={cap.value}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {formatPercent((cap.value / cap.limit) * 100)} of limit used
+            </TooltipContent>
+          </Tooltip>
+          <div className="relative mt-1 h-4">
+            {capTicks.map((tick) => (
+              <span
+                key={tick}
+                className="text-muted absolute -translate-x-1/2 text-xs"
+                style={{ left: `${tick}%` }}
+              >
+                {tick}%
+              </span>
+            ))}
           </div>
-          <span className="text-basis text-xs">{formatPercent(progress)}</span>
         </div>
       )}
     </div>
@@ -244,10 +302,11 @@ function InfraPlanDropdown({
   currentConcurrencyLimit,
   currentPlanSku,
   hasPaymentMethod,
+  hobbyPlan,
   isEnterprisePlan,
   onBillingChange,
   plans,
-  proPlanAmountCents,
+  proPlan,
   selectedPlan,
 }: {
   billingActionsReady: boolean;
@@ -257,10 +316,11 @@ function InfraPlanDropdown({
   currentConcurrencyLimit?: number | null;
   currentPlanSku: InfraPlanSku;
   hasPaymentMethod: boolean;
+  hobbyPlan?: SelfServePlan | null;
   isEnterprisePlan: boolean;
   onBillingChange: () => Promise<void>;
   plans: InfraPlan[];
-  proPlanAmountCents?: number | null;
+  proPlan?: SelfServePlan | null;
   selectedPlan: InfraPlan;
 }) {
   const router = useRouter();
@@ -341,7 +401,8 @@ function InfraPlanDropdown({
         currentConcurrencyLimit,
         currentPlan: currentBillingPlan,
         currentPlanSku,
-        proPlanAmountCents,
+        hobbyPlan,
+        proPlan,
         targetSku: plan.sku,
       });
 
@@ -389,7 +450,8 @@ function InfraPlanDropdown({
       currentConcurrencyLimit,
       currentPlanSku,
       hasPaymentMethod,
-      proPlanAmountCents,
+      hobbyPlan,
+      proPlan,
     ],
   );
 
@@ -417,8 +479,6 @@ function InfraPlanDropdown({
               <span className="bg-canvasMuted rounded px-1.5 py-0.5 font-medium">
                 {selectedPlan.displaySku ?? selectedPlan.sku}
               </span>
-              <span>{selectedPlan.eventStream}</span>
-              <span className="text-disabled">·</span>
               <span>{selectedPlan.queueDepth} depth</span>
               <span className="text-disabled">·</span>
               <span>{selectedPlan.execConcurrency} concurrency</span>
@@ -434,7 +494,7 @@ function InfraPlanDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-[min(calc(100vw-2rem),640px)] overflow-hidden p-0"
+          className="w-[min(calc(100vw-2rem),420px)] overflow-hidden p-0"
         >
           <div className="border-subtle bg-canvasSubtle flex items-center gap-1 border-b p-2">
             <button
@@ -455,12 +515,10 @@ function InfraPlanDropdown({
           </div>
 
           <div className="overflow-x-auto">
-            <div className="min-w-[580px]">
-              <div className="bg-canvasSubtle text-muted grid grid-cols-[96px_140px_140px_160px_1fr] px-3 py-2 text-left text-[11px] font-medium uppercase">
+            <div className="min-w-[360px]">
+              <div className="bg-canvasSubtle text-muted grid grid-cols-[4.25rem_1fr_6.75rem] gap-x-3 px-3 py-2 text-left text-[11px] font-medium uppercase">
                 <span>SKU</span>
-                <span>Events</span>
-                <span>Queue depth</span>
-                <span>Exec concurrency</span>
+                <span>Concurrency</span>
                 <span className="text-right">Price / mo</span>
               </div>
               {plans.map((plan) => {
@@ -470,7 +528,8 @@ function InfraPlanDropdown({
                       currentConcurrencyLimit,
                       currentPlan: currentBillingPlan,
                       currentPlanSku,
-                      proPlanAmountCents,
+                      hobbyPlan,
+                      proPlan,
                       targetSku: plan.sku,
                     })
                   : ({
@@ -487,7 +546,7 @@ function InfraPlanDropdown({
                 return (
                   <button
                     className={cn(
-                      'border-subtle text-basis grid w-full grid-cols-[96px_140px_140px_160px_1fr] items-center border-t px-3 py-2.5 text-left text-xs disabled:cursor-default disabled:opacity-100',
+                      'border-subtle text-basis grid w-full grid-cols-[4.25rem_1fr_6.75rem] items-center gap-x-3 border-t px-3 py-2.5 text-left text-xs disabled:cursor-default disabled:opacity-100',
                       isCurrent && 'bg-canvasSubtle',
                       isActionable &&
                         'hover:bg-canvasSubtle focus:bg-canvasSubtle focus:outline-none',
@@ -509,8 +568,6 @@ function InfraPlanDropdown({
                         {plan.sku}
                       </span>
                     </span>
-                    <PlanMetric value={plan.eventStream} />
-                    <PlanMetric value={plan.queueDepth} />
                     <PlanMetric value={plan.execConcurrency} />
                     <span className="flex min-w-0 items-center justify-end gap-2">
                       {isCurrent ? <YourPlanBadge /> : null}

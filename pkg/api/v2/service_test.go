@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/inngest/inngest/pkg/api/v2/apiv2base"
 	"github.com/inngest/inngest/pkg/coreapi/graph/models"
 	"github.com/inngest/inngest/pkg/cqrs"
 	"github.com/inngest/inngest/pkg/enums"
@@ -251,22 +253,6 @@ func TestService_Metadata_Timestamp(t *testing.T) {
 	})
 }
 
-func boolPtr(value bool) *bool {
-	return &value
-}
-
-func strPtr(value string) *string {
-	return &value
-}
-
-func intPtr(value int) *int {
-	return &value
-}
-
-func int32Ptr(value int32) *int32 {
-	return &value
-}
-
 func TestService_GetApp(t *testing.T) {
 	appID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	createdAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
@@ -478,8 +464,8 @@ func TestService_GetApps(t *testing.T) {
 		})
 
 		resp, err := NewService(ServiceOptions{Apps: apps}).GetApps(context.Background(), &apiv2.GetAppsRequest{
-			Cursor: strPtr(firstID.String()),
-			Limit:  int32Ptr(1),
+			Cursor: new(firstID.String()),
+			Limit:  new(int32(1)),
 		})
 
 		require.NoError(t, err)
@@ -499,7 +485,7 @@ func TestService_GetApps(t *testing.T) {
 		})
 
 		resp, err := NewService(ServiceOptions{Apps: apps}).GetApps(context.Background(), &apiv2.GetAppsRequest{
-			Archived: boolPtr(true),
+			Archived: new(true),
 		})
 
 		require.NoError(t, err)
@@ -509,7 +495,7 @@ func TestService_GetApps(t *testing.T) {
 	t.Run("requires valid cursor", func(t *testing.T) {
 		resp, err := NewService(ServiceOptions{Apps: &mockAppProvider{}}).GetApps(
 			context.Background(),
-			&apiv2.GetAppsRequest{Cursor: strPtr("not-a-uuid")},
+			&apiv2.GetAppsRequest{Cursor: new("not-a-uuid")},
 		)
 
 		require.Nil(t, resp)
@@ -519,7 +505,7 @@ func TestService_GetApps(t *testing.T) {
 	t.Run("validates limit", func(t *testing.T) {
 		resp, err := NewService(ServiceOptions{Apps: &mockAppProvider{}}).GetApps(
 			context.Background(),
-			&apiv2.GetAppsRequest{Limit: int32Ptr(maxAppsLimit + 1)},
+			&apiv2.GetAppsRequest{Limit: new(int32(maxAppsLimit + 1))},
 		)
 
 		require.Nil(t, resp)
@@ -575,7 +561,7 @@ func TestService_GetFunction(t *testing.T) {
 			Slug: "my-app-test-fn",
 			Steps: []inngest.Step{{
 				ID:      "step",
-				Retries: intPtr(retries),
+				Retries: new(retries),
 			}},
 			Triggers: inngest.MultipleTriggers{
 				{EventTrigger: &inngest.EventTrigger{Event: "user.created", Expression: &condition}},
@@ -803,8 +789,8 @@ func TestService_GetFunctions(t *testing.T) {
 		service := NewService(ServiceOptions{Functions: functions})
 		resp, err := service.GetFunctions(context.Background(), &apiv2.GetFunctionsRequest{
 			AppId:  "my-app",
-			Cursor: strPtr(firstID.String()),
-			Limit:  int32Ptr(1),
+			Cursor: new(firstID.String()),
+			Limit:  new(int32(1)),
 		})
 
 		require.NoError(t, err)
@@ -817,7 +803,7 @@ func TestService_GetFunctions(t *testing.T) {
 		service := NewService(ServiceOptions{Functions: &mockFunctionProvider{}})
 		resp, err := service.GetFunctions(context.Background(), &apiv2.GetFunctionsRequest{
 			AppId:  "my-app",
-			Cursor: strPtr("not-a-uuid"),
+			Cursor: new("not-a-uuid"),
 		})
 
 		require.Nil(t, resp)
@@ -828,7 +814,7 @@ func TestService_GetFunctions(t *testing.T) {
 		service := NewService(ServiceOptions{Functions: &mockFunctionProvider{}})
 		resp, err := service.GetFunctions(context.Background(), &apiv2.GetFunctionsRequest{
 			AppId: "my-app",
-			Limit: int32Ptr(maxFunctionsLimit + 1),
+			Limit: new(int32(maxFunctionsLimit + 1)),
 		})
 
 		require.Nil(t, resp)
@@ -877,9 +863,9 @@ func TestService_GetFunctionRun(t *testing.T) {
 		EndedAt:      &endedAt,
 	}
 	functions := &mockFunctionProvider{}
-	functions.On("GetFunction", mock.Anything, functionID.String()).Return(fn, nil).Once()
+	functions.On("GetFunction", mock.Anything, functionID.String()).Return(fn, nil).Twice()
 	runs := &mockRunProvider{}
-	runs.On("GetRun", mock.Anything, runID, GetRunOpts{IncludeOutput: true}).Return(run, nil).Once()
+	runs.On("GetRun", mock.Anything, runID, GetRunOpts{IncludeOutput: true}).Return(run, nil).Twice()
 
 	service := NewService(ServiceOptions{
 		Functions: functions,
@@ -890,23 +876,25 @@ func TestService_GetFunctionRun(t *testing.T) {
 		runs.AssertExpectations(t)
 	})
 
-	t.Run("returns mapped run data", func(t *testing.T) {
-		resp, err := service.GetFunctionRun(context.Background(), &apiv2.GetFunctionRunRequest{
-			RunId:         runID.String(),
-			IncludeOutput: boolPtr(true),
+	for name, req := range map[string]*apiv2.GetFunctionRunRequest{
+		"include selector":     {RunId: runID.String(), Include: []string{"output"}},
+		"legacy includeOutput": {RunId: runID.String(), IncludeOutput: new(true)},
+	} {
+		t.Run("returns mapped run data/"+name, func(t *testing.T) {
+			resp, err := service.GetFunctionRun(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, runID.String(), resp.Data.Id)
+			require.Equal(t, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED, resp.Data.Status)
+			require.Equal(t, ulid.Time(runID.Time()).UTC(), resp.Data.QueuedAt.AsTime())
+			require.Equal(t, startedAt, resp.Data.StartedAt.AsTime())
+			require.Equal(t, "test-fn", resp.Data.Function.Id)
+			require.Equal(t, "Test function", resp.Data.Function.Name)
+			require.Equal(t, "my-app", resp.Data.App.Id)
+			require.Nil(t, resp.Data.Output)
+			require.NotNil(t, resp.Data.DurationMs)
+			require.Equal(t, uint64(2000), *resp.Data.DurationMs)
 		})
-		require.NoError(t, err)
-		require.Equal(t, runID.String(), resp.Data.Id)
-		require.Equal(t, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED, resp.Data.Status)
-		require.Equal(t, ulid.Time(runID.Time()).UTC(), resp.Data.QueuedAt.AsTime())
-		require.Equal(t, startedAt, resp.Data.StartedAt.AsTime())
-		require.Equal(t, "test-fn", resp.Data.Function.Id)
-		require.Equal(t, "Test function", resp.Data.Function.Name)
-		require.Equal(t, "my-app", resp.Data.App.Id)
-		require.Nil(t, resp.Data.Output)
-		require.NotNil(t, resp.Data.DurationMs)
-		require.Equal(t, uint64(2000), *resp.Data.DurationMs)
-	})
+	}
 
 	t.Run("requires run id", func(t *testing.T) {
 		resp, err := service.GetFunctionRun(context.Background(), &apiv2.GetFunctionRunRequest{})
@@ -922,6 +910,17 @@ func TestService_GetFunctionRun(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, resp)
 		require.Contains(t, err.Error(), "Run ID must be a valid ULID")
+	})
+
+	t.Run("rejects unsupported include", func(t *testing.T) {
+		service := NewService(ServiceOptions{Functions: &mockFunctionProvider{}, Runs: &mockRunProvider{}})
+		resp, err := service.GetFunctionRun(context.Background(), &apiv2.GetFunctionRunRequest{
+			RunId:   runID.String(),
+			Include: []string{"deferredFrom"},
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, "deferredFrom")
 	})
 
 	t.Run("returns not found when run is missing", func(t *testing.T) {
@@ -972,7 +971,7 @@ func TestService_GetFunctionRun(t *testing.T) {
 		outputIdentifier := cqrs.SpanIdentifier{
 			SpanID:      "output-span",
 			InputSpanID: &inputSpanID,
-			Preview:     boolPtr(true),
+			Preview:     new(true),
 		}
 		outputID, err := outputIdentifier.Encode()
 		require.NoError(t, err)
@@ -1011,7 +1010,7 @@ func TestService_GetFunctionRun(t *testing.T) {
 
 		resp, err := service.GetFunctionRun(context.Background(), &apiv2.GetFunctionRunRequest{
 			RunId:         runID.String(),
-			IncludeOutput: boolPtr(true),
+			IncludeOutput: new(true),
 		})
 
 		require.NoError(t, err)
@@ -1044,7 +1043,7 @@ func TestService_GetFunctionRun(t *testing.T) {
 
 		resp, err := service.GetFunctionRun(context.Background(), &apiv2.GetFunctionRunRequest{
 			RunId:         runID.String(),
-			IncludeOutput: boolPtr(true),
+			IncludeOutput: new(true),
 		})
 
 		require.NoError(t, err)
@@ -1056,6 +1055,7 @@ func TestService_ListRuns(t *testing.T) {
 	runID := ulid.MustParse("01hp1zx8m3ng9vp6qn0xk7j4cy")
 	eventID := ulid.MustParse("01hp1zyb8p2nb5kvm2a6x1h9ae")
 	startedAt := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	queuedAt := startedAt.Add(-1500 * time.Millisecond)
 	endedAt := startedAt.Add(5 * time.Second)
 	from := startedAt.Add(-time.Hour)
 	until := startedAt.Add(time.Hour)
@@ -1072,13 +1072,21 @@ func TestService_ListRuns(t *testing.T) {
 	run := &RunListItem{
 		RunID:        runID,
 		Cursor:       "opaque-cursor",
+		QueuedAt:     queuedAt,
 		RunStartedAt: startedAt,
 		EventID:      eventID,
 		Status:       enums.RunStatusCompleted,
 		EndedAt:      &endedAt,
 		FunctionID:   "test-fn",
 		FunctionName: "Test function",
+		FunctionSlug: "test-fn-slug",
 		AppID:        "my-app",
+		EventName:    "app/tested",
+		IsDeferred:   &isDeferred,
+		DeferredFrom: &RunDeferredFrom{
+			FunctionSlug: "parent-function",
+			FunctionName: "Parent function",
+		},
 	}
 
 	t.Run("returns mapped runs with filters", func(t *testing.T) {
@@ -1090,43 +1098,78 @@ func TestService_ListRuns(t *testing.T) {
 			From:          &from,
 			Until:         &until,
 			TimeField:     RunTimeFieldStartedAt,
-			Status:        []enums.RunStatus{enums.RunStatusCompleted},
+			Status:        []apiv2.FunctionRunStatus{apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED},
 			AppIDs:        []string{"my-app"},
 			FunctionIDs:   []string{"test-fn"},
 			IsDeferred:    &isDeferred,
 			Order:         OrderDirectionAsc,
-		}).Return(&GetRunsResult{Runs: []*RunListItem{run}, HasMore: true}, nil).Once()
+			CEL:           `event.data.userId == "123"`,
+			Include:       []RunListInclude{RunListIncludeDeferredFrom},
+		}).Return(&GetRunsResult{Runs: []*RunListItem{run}, Cursor: pageCursor, HasMore: true}, nil).Once()
 		t.Cleanup(func() {
 			reader.AssertExpectations(t)
 		})
 
 		service := NewService(ServiceOptions{Runs: reader})
 		resp, err := service.ListRuns(context.Background(), &apiv2.ListRunsRequest{
-			Cursor:        strPtr(pageCursor),
-			Limit:         &limit,
-			IncludeOutput: boolPtr(true),
-			From:          timestamppb.New(from),
-			Until:         timestamppb.New(until),
-			TimeField:     "startedAt",
-			Status:        []string{"COMPLETED"},
-			AppId:         []string{"my-app"},
-			FunctionId:    []string{"test-fn"},
-			IsDeferred:    &isDeferred,
-			Order:         "asc",
+			Cursor:     new(pageCursor),
+			Limit:      &limit,
+			From:       timestamppb.New(from),
+			Until:      timestamppb.New(until),
+			TimeField:  "startedAt",
+			Status:     []string{"COMPLETED"},
+			AppId:      []string{"my-app"},
+			FunctionId: []string{"test-fn"},
+			IsDeferred: &isDeferred,
+			Order:      "asc",
+			Query:      new(`event.data.userId == "123"`),
+			Include:    []string{"output", "deferredFrom"},
 		})
 
 		require.NoError(t, err)
 		require.Len(t, resp.Data, 1)
 		require.Equal(t, runID.String(), resp.Data[0].Id)
 		require.Equal(t, "test-fn", resp.Data[0].Function.Id)
+		require.Equal(t, "test-fn-slug", resp.Data[0].Function.GetSlug())
 		require.Equal(t, "my-app", resp.Data[0].App.Id)
+		require.Equal(t, "app/tested", resp.Data[0].Trigger.GetEventName())
+		require.False(t, resp.Data[0].GetIsDeferred())
+		require.Equal(t, "parent-function", resp.Data[0].DeferredFrom.FunctionSlug)
+		require.Equal(t, "Parent function", resp.Data[0].DeferredFrom.GetFunctionName())
 		require.Equal(t, apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED, resp.Data[0].Status)
+		require.Equal(t, queuedAt, resp.Data[0].QueuedAt.AsTime())
+		require.Equal(t, startedAt, resp.Data[0].StartedAt.AsTime())
+		require.Equal(t, endedAt, resp.Data[0].EndedAt.AsTime())
+		require.Equal(t, uint64(5000), resp.Data[0].GetDurationMs())
 		require.NotNil(t, resp.Metadata.TimeRange)
 		require.Equal(t, from, resp.Metadata.TimeRange.From.AsTime())
 		require.Equal(t, until, resp.Metadata.TimeRange.Until.AsTime())
 		require.True(t, resp.Page.HasMore)
-		require.Equal(t, "opaque-cursor", resp.Page.GetCursor())
+		require.Equal(t, pageCursor, resp.Page.GetCursor())
 		require.Equal(t, int32(1), resp.Page.Limit)
+	})
+
+	t.Run("omits timing fields for a queued run", func(t *testing.T) {
+		reader := &mockRunProvider{}
+		reader.On("GetRuns", mock.Anything, mock.Anything).Return(&GetRunsResult{
+			Runs: []*RunListItem{{
+				RunID:   runID,
+				EventID: eventID,
+				Status:  enums.RunStatusScheduled,
+				EndedAt: &endedAt,
+			}},
+		}, nil).Once()
+		t.Cleanup(func() {
+			reader.AssertExpectations(t)
+		})
+
+		resp, err := NewService(ServiceOptions{Runs: reader}).ListRuns(t.Context(), &apiv2.ListRunsRequest{})
+
+		require.NoError(t, err)
+		require.Len(t, resp.Data, 1)
+		require.Equal(t, ulid.Time(runID.Time()).UTC(), resp.Data[0].QueuedAt.AsTime())
+		require.Nil(t, resp.Data[0].StartedAt)
+		require.Nil(t, resp.Data[0].DurationMs)
 	})
 
 	t.Run("validates time range", func(t *testing.T) {
@@ -1163,11 +1206,63 @@ func TestService_ListRuns(t *testing.T) {
 	t.Run("validates cursor", func(t *testing.T) {
 		service := NewService(ServiceOptions{Runs: &mockRunProvider{}})
 		resp, err := service.ListRuns(context.Background(), &apiv2.ListRunsRequest{
-			Cursor: strPtr("not-a-cursor"),
+			Cursor: new("not-a-cursor"),
 		})
 
 		require.Nil(t, resp)
 		require.ErrorContains(t, err, "Cursor is invalid")
+	})
+
+	t.Run("uses a provider cursor for an empty continuing page", func(t *testing.T) {
+		reader := &mockRunProvider{}
+		reader.On("GetRuns", mock.Anything, mock.Anything).Return(&GetRunsResult{
+			Cursor:  "provider-cursor",
+			HasMore: true,
+		}, nil).Once()
+
+		resp, err := NewService(ServiceOptions{Runs: reader}).ListRuns(t.Context(), &apiv2.ListRunsRequest{
+			Query: new(`event.name == "app/test"`),
+		})
+
+		require.NoError(t, err)
+		require.Empty(t, resp.Data)
+		require.True(t, resp.Page.HasMore)
+		require.Equal(t, "provider-cursor", resp.Page.GetCursor())
+	})
+
+	t.Run("maps expression errors", func(t *testing.T) {
+		reader := &mockRunProvider{}
+		reader.On("GetRuns", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("compile CEL: %w", ErrExpressionInvalid)).Once()
+
+		resp, err := NewService(ServiceOptions{Runs: reader}).ListRuns(t.Context(), &apiv2.ListRunsRequest{
+			Query: new("not valid"),
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, apiv2base.ErrorExpressionInvalid)
+	})
+
+	t.Run("maps unsupported paused status errors", func(t *testing.T) {
+		reader := &mockRunProvider{}
+		reader.On("GetRuns", mock.Anything, mock.Anything).Return(nil, ErrPausedRunStatusNotSupported).Once()
+
+		resp, err := NewService(ServiceOptions{Runs: reader}).ListRuns(t.Context(), &apiv2.ListRunsRequest{
+			Status: []string{"PAUSED"},
+		})
+
+		require.Nil(t, resp)
+		require.Equal(t, codes.Unimplemented, status.Code(err))
+		require.ErrorContains(t, err, apiv2base.ErrorNotImplemented)
+		require.ErrorContains(t, err, "Filtering runs by PAUSED status is not implemented")
+	})
+
+	t.Run("rejects queries over 2048 bytes", func(t *testing.T) {
+		resp, err := NewService(ServiceOptions{Runs: &mockRunProvider{}}).ListRuns(t.Context(), &apiv2.ListRunsRequest{
+			Query: new(strings.Repeat("é", maxRunsCELBytes/2+1)),
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, apiv2base.ErrorQueryTooLong)
 	})
 }
 
@@ -1192,10 +1287,11 @@ func TestService_ListFunctionRuns(t *testing.T) {
 		Cursor:      "",
 		Limit:       20,
 		TimeField:   RunTimeFieldQueuedAt,
-		Status:      []enums.RunStatus{},
+		Status:      []apiv2.FunctionRunStatus{},
 		AppIDs:      []string{"inngest ai"},
 		FunctionIDs: []string{"hello/world"},
 		Order:       OrderDirectionDesc,
+		CEL:         `output.status == "sent"`,
 	}).Return(&GetRunsResult{Runs: []*RunListItem{run}}, nil).Once()
 	t.Cleanup(func() {
 		reader.AssertExpectations(t)
@@ -1206,6 +1302,7 @@ func TestService_ListFunctionRuns(t *testing.T) {
 		AppId:      "inngest%20ai",
 		FunctionId: "hello%2Fworld",
 		Limit:      &limit,
+		Query:      new(`output.status == "sent"`),
 	})
 
 	require.NoError(t, err)
@@ -1213,20 +1310,65 @@ func TestService_ListFunctionRuns(t *testing.T) {
 	require.Equal(t, runID.String(), resp.Data[0].Id)
 	require.Equal(t, "hello-world", resp.Data[0].Function.Id)
 	require.Equal(t, "inngest-ai", resp.Data[0].App.Id)
+
+	t.Run("rejects queries over 2048 bytes", func(t *testing.T) {
+		resp, err := NewService(ServiceOptions{Runs: &mockRunProvider{}}).ListFunctionRuns(t.Context(), &apiv2.ListFunctionRunsRequest{
+			AppId:      "my-app",
+			FunctionId: "test-fn",
+			Query:      new(strings.Repeat("é", maxRunsCELBytes/2+1)),
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, apiv2base.ErrorQueryTooLong)
+	})
+}
+
+func TestListRunsIncludeFromAPI(t *testing.T) {
+	for value, expected := range map[string]ListRunsInclude{
+		"deferredFrom":  ListRunsIncludeDeferredFrom,
+		"deferred_from": ListRunsIncludeDeferredFrom,
+		"output":        ListRunsIncludeOutput,
+	} {
+		t.Run(value, func(t *testing.T) {
+			got, err := ParseListRunsInclude(value)
+			require.NoError(t, err)
+			require.Equal(t, expected, got)
+		})
+	}
+
+	_, err := ParseListRunsInclude("unknown")
+	require.ErrorContains(t, err, `unsupported include value "unknown"`)
+
+	_, err = ParseListRunsInclude("id")
+	require.ErrorContains(t, err, `unsupported include value "id"`)
+}
+
+func TestParseGetFunctionTraceInclude(t *testing.T) {
+	got, err := ParseGetFunctionTraceInclude("output")
+	require.NoError(t, err)
+	require.Equal(t, GetFunctionTraceIncludeOutput, got)
+
+	_, err = ParseGetFunctionTraceInclude("deferredFrom")
+	require.ErrorContains(t, err, `unsupported include value "deferredFrom"`)
 }
 
 func TestRunStatusesFromAPI(t *testing.T) {
-	got, err := runStatusesFromAPI([]string{"COMPLETED", "failed", "RUNNING", " queued "})
+	got, err := runStatusesFromAPI([]string{"COMPLETED", "failed", "PAUSED", "RUNNING", " queued ", "SKIPPED"})
 
 	require.NoError(t, err)
-	require.Equal(t, []enums.RunStatus{
-		enums.RunStatusCompleted,
-		enums.RunStatusFailed,
-		enums.RunStatusRunning,
-		enums.RunStatusScheduled,
+	require.Equal(t, []apiv2.FunctionRunStatus{
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED,
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_FAILED,
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED,
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING,
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED,
+		apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_SKIPPED,
 	}, got)
 
 	_, err = runStatusesFromAPI([]string{"FUNCTION_RUN_STATUS_COMPLETED"})
+	require.ErrorContains(t, err, "Status is invalid")
+
+	_, err = runStatusesFromAPI([]string{"UNKNOWN"})
 	require.ErrorContains(t, err, "Status is invalid")
 }
 
@@ -1313,36 +1455,38 @@ func TestService_GetEventRuns(t *testing.T) {
 		AppID:        "my-app",
 	}
 
-	t.Run("returns mapped event runs", func(t *testing.T) {
-		reader := &mockRunProvider{}
-		reader.On("GetRuns", mock.Anything, GetRunsOpts{
-			EventID:       eventID,
-			Limit:         defaultEventRunsLimit,
-			IncludeOutput: true,
-		}).Return(&GetRunsResult{Runs: []*RunListItem{run}}, nil).Once()
-		t.Cleanup(func() {
-			reader.AssertExpectations(t)
-		})
+	for name, req := range map[string]*apiv2.GetEventRunsRequest{
+		"include selector":     {EventId: eventID.String(), Include: []string{"output"}},
+		"legacy includeOutput": {EventId: eventID.String(), IncludeOutput: new(true)},
+	} {
+		t.Run("returns mapped event runs/"+name, func(t *testing.T) {
+			reader := &mockRunProvider{}
+			reader.On("GetRuns", mock.Anything, GetRunsOpts{
+				EventID:       eventID,
+				Limit:         defaultEventRunsLimit,
+				IncludeOutput: true,
+			}).Return(&GetRunsResult{Runs: []*RunListItem{run}}, nil).Once()
+			t.Cleanup(func() {
+				reader.AssertExpectations(t)
+			})
 
-		service := NewService(ServiceOptions{Runs: reader})
-		resp, err := service.GetEventRuns(context.Background(), &apiv2.GetEventRunsRequest{
-			EventId:       eventID.String(),
-			IncludeOutput: boolPtr(true),
-		})
+			service := NewService(ServiceOptions{Runs: reader})
+			resp, err := service.GetEventRuns(context.Background(), req)
 
-		require.NoError(t, err)
-		require.Len(t, resp.Data, 1)
-		require.Equal(t, runID.String(), resp.Data[0].Id)
-		require.Equal(t, "test-fn", resp.Data[0].Function.Id)
-		require.Equal(t, "Test function", resp.Data[0].Function.Name)
-		require.Equal(t, "my-app", resp.Data[0].App.Id)
-		require.Equal(t, []string{eventID.String()}, resp.Data[0].Trigger.EventIds)
-		require.NotNil(t, resp.Data[0].Output)
-		require.True(t, resp.Data[0].Output.Fields["ok"].GetBoolValue())
-		require.NotNil(t, resp.Page)
-		require.False(t, resp.Page.HasMore)
-		require.Equal(t, int32(defaultEventRunsLimit), resp.Page.Limit)
-	})
+			require.NoError(t, err)
+			require.Len(t, resp.Data, 1)
+			require.Equal(t, runID.String(), resp.Data[0].Id)
+			require.Equal(t, "test-fn", resp.Data[0].Function.Id)
+			require.Equal(t, "Test function", resp.Data[0].Function.Name)
+			require.Equal(t, "my-app", resp.Data[0].App.Id)
+			require.Equal(t, []string{eventID.String()}, resp.Data[0].Trigger.EventIds)
+			require.NotNil(t, resp.Data[0].Output)
+			require.True(t, resp.Data[0].Output.Fields["ok"].GetBoolValue())
+			require.NotNil(t, resp.Page)
+			require.False(t, resp.Page.HasMore)
+			require.Equal(t, int32(defaultEventRunsLimit), resp.Page.Limit)
+		})
+	}
 
 	t.Run("passes pagination to reader", func(t *testing.T) {
 		reader := &mockRunProvider{}
@@ -1403,6 +1547,17 @@ func TestService_GetEventRuns(t *testing.T) {
 		require.ErrorContains(t, err, "Event ID must be a valid ULID")
 	})
 
+	t.Run("rejects unsupported include", func(t *testing.T) {
+		service := NewService(ServiceOptions{Runs: &mockRunProvider{}})
+		resp, err := service.GetEventRuns(context.Background(), &apiv2.GetEventRunsRequest{
+			EventId: eventID.String(),
+			Include: []string{"deferredFrom"},
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, "deferredFrom")
+	})
+
 	t.Run("returns internal error when reader fails", func(t *testing.T) {
 		reader := &mockRunProvider{}
 		reader.On("GetRuns", mock.Anything, GetRunsOpts{
@@ -1439,7 +1594,7 @@ func TestService_GetEventRuns(t *testing.T) {
 		service := NewService(ServiceOptions{Runs: &mockRunProvider{}})
 		resp, err := service.GetEventRuns(context.Background(), &apiv2.GetEventRunsRequest{
 			EventId: eventID.String(),
-			Cursor:  strPtr(runID.String()),
+			Cursor:  new(runID.String()),
 		})
 
 		require.Nil(t, resp)
@@ -1727,8 +1882,8 @@ func TestService_GetFunctionTrace(t *testing.T) {
 	responseHeaders := headers.Compact{"content-type": {"application/json"}}
 	outputIdentifier := cqrs.SpanIdentifier{
 		SpanID:      "span-output",
-		InputSpanID: strPtr("span-input"),
-		Preview:     boolPtr(true),
+		InputSpanID: new("span-input"),
+		Preview:     new(true),
 	}
 	outputID := mustEncodeSpanIdentifier(t, outputIdentifier)
 
@@ -1812,36 +1967,38 @@ func TestService_GetFunctionTrace(t *testing.T) {
 		FunctionTraces: &mockFunctionTraceReader{},
 	})
 
-	t.Run("returns a nested trace response", func(t *testing.T) {
-		service := newService(t, true)
+	for name, req := range map[string]*apiv2.GetFunctionTraceRequest{
+		"include selector":     {RunId: runID.String(), Include: []string{"output"}},
+		"legacy includeOutput": {RunId: runID.String(), IncludeOutput: new(true)},
+	} {
+		t.Run("returns a nested trace response/"+name, func(t *testing.T) {
+			service := newService(t, true)
 
-		resp, err := service.GetFunctionTrace(context.Background(), &apiv2.GetFunctionTraceRequest{
-			RunId:         runID.String(),
-			IncludeOutput: boolPtr(true),
+			resp, err := service.GetFunctionTrace(context.Background(), req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Data)
+			require.Equal(t, runID.String(), resp.Data.RunId)
+			require.NotNil(t, resp.Data.RootSpan)
+			require.Equal(t, "Run", resp.Data.RootSpan.Name)
+			require.Equal(t, "run-span", resp.Data.RootSpan.Id)
+			require.Equal(t, apiv2.TraceSpanStatus_TRACE_SPAN_STATUS_COMPLETED, resp.Data.RootSpan.Status)
+			require.Len(t, resp.Data.RootSpan.Children, 1)
+
+			child := resp.Data.RootSpan.Children[0]
+			require.Equal(t, "Fetch data", child.Name)
+			require.Equal(t, "step-span", child.Id)
+			require.Equal(t, apiv2.TraceSpanStatus_TRACE_SPAN_STATUS_COMPLETED, child.Status)
+			require.NotNil(t, child.StepOp)
+			require.Equal(t, apiv2.TraceStepOp_TRACE_STEP_OP_RUN, *child.StepOp)
+			require.NotNil(t, child.StepId)
+			require.Equal(t, "step-1", *child.StepId)
+			require.NotNil(t, child.Input)
+			require.Equal(t, "hello", child.Input.Fields["message"].GetStringValue())
+			require.NotNil(t, child.Output)
+			require.True(t, child.Output.Fields["ok"].GetBoolValue())
 		})
-		require.NoError(t, err)
-		require.NotNil(t, resp)
-		require.NotNil(t, resp.Data)
-		require.Equal(t, runID.String(), resp.Data.RunId)
-		require.NotNil(t, resp.Data.RootSpan)
-		require.Equal(t, "Run", resp.Data.RootSpan.Name)
-		require.Equal(t, "run-span", resp.Data.RootSpan.Id)
-		require.Equal(t, apiv2.TraceSpanStatus_TRACE_SPAN_STATUS_COMPLETED, resp.Data.RootSpan.Status)
-		require.Len(t, resp.Data.RootSpan.Children, 1)
-
-		child := resp.Data.RootSpan.Children[0]
-		require.Equal(t, "Fetch data", child.Name)
-		require.Equal(t, "step-span", child.Id)
-		require.Equal(t, apiv2.TraceSpanStatus_TRACE_SPAN_STATUS_COMPLETED, child.Status)
-		require.NotNil(t, child.StepOp)
-		require.Equal(t, apiv2.TraceStepOp_TRACE_STEP_OP_RUN, *child.StepOp)
-		require.NotNil(t, child.StepId)
-		require.Equal(t, "step-1", *child.StepId)
-		require.NotNil(t, child.Input)
-		require.Equal(t, "hello", child.Input.Fields["message"].GetStringValue())
-		require.NotNil(t, child.Output)
-		require.True(t, child.Output.Fields["ok"].GetBoolValue())
-	})
+	}
 
 	t.Run("validates missing run ID", func(t *testing.T) {
 		resp, err := validationService.GetFunctionTrace(context.Background(), &apiv2.GetFunctionTraceRequest{})
@@ -1857,12 +2014,22 @@ func TestService_GetFunctionTrace(t *testing.T) {
 		require.Contains(t, err.Error(), "Run ID must be a valid ULID")
 	})
 
+	t.Run("rejects unsupported include", func(t *testing.T) {
+		resp, err := validationService.GetFunctionTrace(context.Background(), &apiv2.GetFunctionTraceRequest{
+			RunId:   runID.String(),
+			Include: []string{"deferredFrom"},
+		})
+
+		require.Nil(t, resp)
+		require.ErrorContains(t, err, "deferredFrom")
+	})
+
 	t.Run("omits output when not requested", func(t *testing.T) {
 		service := newService(t, false)
 
 		resp, err := service.GetFunctionTrace(context.Background(), &apiv2.GetFunctionTraceRequest{
 			RunId:         runID.String(),
-			IncludeOutput: boolPtr(false),
+			IncludeOutput: new(false),
 		})
 		require.NoError(t, err)
 		require.NotNil(t, resp)
@@ -1932,7 +2099,7 @@ func TestService_GetFunctionTrace(t *testing.T) {
 
 		resp, err := service.GetFunctionTrace(context.Background(), &apiv2.GetFunctionTraceRequest{
 			RunId:         runID.String(),
-			IncludeOutput: boolPtr(true),
+			IncludeOutput: new(true),
 		})
 
 		require.Nil(t, resp)

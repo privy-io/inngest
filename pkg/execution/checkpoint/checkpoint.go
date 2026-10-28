@@ -87,20 +87,33 @@ type Opts struct {
 	Executor execution.Executor
 	// TracerProvider is used to create spans within the APIv1 endpoints and allows the checkpointing API to write traces.
 	TracerProvider tracing.TracerProvider
-	// Queue allows the checkppinting API to continue by enqueueing new queue items.
-	Queue queue.Queue
+	// Queue contains only the queue capabilities used by checkpointing.
+	Queue CheckpointQueue
 	// MetricsProvider reports usage metrics.
 	MetricsProvider MetricsProvider
 	// BackoffFunc computes the retry time for a given attempt number.
 	// If nil, defaults to backoff.DefaultBackoff.
 	BackoffFunc backoff.BackoffFunc
-	// AllowStepMetadata controls whether step metadata is allowed for a given account.
-	AllowStepMetadata executor.AllowStepMetadata
 	// EnforceStepSizeLimits controls whether step output size limits are enforced for a given account.
 	// The default is to always enforce the limits.
 	EnforceStepSizeLimits func(ctx context.Context, accountID uuid.UUID) bool
 	// AllowAsyncDispatchValidation gates the dispatch validator per account.
 	AllowAsyncDispatchValidation AllowAsyncDispatchValidation
+	// SyncLifecycleListeners are notified synchronously (see
+	// execution.SyncLifecycleListener and pkg/tracing.WithMetadataSyncListeners)
+	// of opcode-attached metadata and defer spans emitted while checkpointing,
+	// the same listeners pkg/api/apiv1's other span-creating endpoints use --
+	// wiring this through is what lets DuckDB dual-write (pkg/execution/dualwrite)
+	// observe checkpoint-originated metadata/defers, not just the executor's
+	// own in-process path.
+	SyncLifecycleListeners []execution.SyncLifecycleListener
+}
+
+// CheckpointQueue is the reduced queue surface used by checkpointing.
+type CheckpointQueue interface {
+	queue.Producer
+	queue.QueueItemReader
+	queue.AttemptResetter
 }
 
 func New(o Opts) Checkpointer {
@@ -282,6 +295,14 @@ func (c checkpointer) CheckpointSyncSteps(ctx context.Context, input SyncCheckpo
 
 			c.processMetadata(ctx, l, input.AccountID, input.Metadata, stepSpanRef, op, "checkpoint.SyncStep.metadata")
 
+			// Notify sync listeners (e.g. dualwrite) the same way
+			// executor.handleGeneratorStep does for the async/queue-backed
+			// path — checkpointed steps build their own span directly above
+			// rather than going through that path at all, so without this
+			// call sync listeners would never see step.run/step opcodes
+			// checkpointed from a sync (API-based) function.
+			c.Executor.RunStepRunFinishedLifecycle(ctx, *input.Metadata, runCtx.LifecycleItem(), inngest.SourceEdge, op, time.Now())
+
 			go c.MetricsProvider.OnStepFinished(ctx, MetricCardinality{
 				AccountID: input.AccountID,
 				EnvID:     input.EnvID,
@@ -396,7 +417,10 @@ func (c checkpointer) CheckpointSyncSteps(ctx context.Context, input SyncCheckpo
 			)
 
 		case enums.OpcodeDeferAdd:
-			if err := defers.SaveFromOp(ctx, c.State, c.TracerProvider, l, input.Metadata, op); err != nil {
+			// c.SyncLifecycleListeners is forwarded from apiv1's
+			// NewCheckpointAPI (o.SyncLifecycleListeners) so dual-write
+			// observes checkpoint-originated defer spans.
+			if err := defers.SaveFromOp(ctx, c.State, c.TracerProvider, c.SyncLifecycleListeners, l, input.Metadata, op); err != nil {
 				// Log without returning the error: a bad defer must
 				// never fail its parent run. We may rethink this as
 				// the Defer feature matures.
@@ -409,7 +433,8 @@ func (c checkpointer) CheckpointSyncSteps(ctx context.Context, input SyncCheckpo
 			}
 
 		case enums.OpcodeDeferAbort:
-			if err := defers.AbortFromOp(ctx, c.State, c.TracerProvider, l, input.Metadata, op); err != nil {
+			// Sync listeners: see the OpcodeDeferAdd case above.
+			if err := defers.AbortFromOp(ctx, c.State, c.TracerProvider, c.SyncLifecycleListeners, l, input.Metadata, op); err != nil {
 				// Log without returning the error: a bad defer must
 				// never fail its parent run. We may rethink this as
 				// the Defer feature matures.
@@ -578,6 +603,24 @@ func (c checkpointer) checkpointAsyncSteps(ctx context.Context, input AsyncCheck
 
 			c.processMetadata(ctx, l, input.AccountID, &md, stepSpanRef, op, "checkpoint.AsyncStep.metadata")
 
+			// See checkpointSyncSteps's identical call for why this is
+			// needed. item is a placeholder zero value here (like
+			// inngest.SourceEdge elsewhere in this file) — reconstructing
+			// the real queue.Item behind input.QueueItemRef isn't needed
+			// for a sync listener to record this step.
+			c.Executor.RunStepRunFinishedLifecycle(ctx, md, queue.Item{}, inngest.SourceEdge, op, time.Now())
+
+			// Report usage for the step.  The executor only sees the final response of
+			// the request wrapping these checkpoints, so without this every step
+			// checkpointed here goes uncounted.  Duplicate and idempotent saves `continue`
+			// above, so retried checkpoints aren't double counted.
+			c.MetricsProvider.OnStepFinished(ctx, MetricCardinality{
+				AccountID: input.AccountID,
+				EnvID:     input.EnvID,
+				AppID:     md.ID.Tenant.AppID,
+				FnID:      md.ID.FunctionID,
+			}, enums.StepStatusCompleted)
+
 		case enums.OpcodeStepPlanned:
 			// When the SDK announces a step is about to run, we open a Running
 			// executor.step span to show progress to the user.
@@ -606,7 +649,8 @@ func (c checkpointer) checkpointAsyncSteps(ctx context.Context, input AsyncCheck
 			}
 
 		case enums.OpcodeDeferAdd:
-			if err := defers.SaveFromOp(ctx, c.State, c.TracerProvider, l, &md, op); err != nil {
+			// Sync listeners: see checkpoint's other OpcodeDeferAdd case.
+			if err := defers.SaveFromOp(ctx, c.State, c.TracerProvider, c.SyncLifecycleListeners, l, &md, op); err != nil {
 				// Log without returning the error: a bad defer must
 				// never fail its parent run. We may rethink this as
 				// the Defer feature matures.
@@ -619,7 +663,8 @@ func (c checkpointer) checkpointAsyncSteps(ctx context.Context, input AsyncCheck
 			}
 
 		case enums.OpcodeDeferAbort:
-			if err := defers.AbortFromOp(ctx, c.State, c.TracerProvider, l, &md, op); err != nil {
+			// Sync listeners: see checkpoint's other OpcodeDeferAdd case.
+			if err := defers.AbortFromOp(ctx, c.State, c.TracerProvider, c.SyncLifecycleListeners, l, &md, op); err != nil {
 				// Log without returning the error: a bad defer must
 				// never fail its parent run. We may rethink this as
 				// the Defer feature matures.
@@ -811,10 +856,6 @@ func (c checkpointer) processMetadata(
 	op state.GeneratorOpcode,
 	location string,
 ) {
-	if !c.AllowStepMetadata.Enabled(ctx, accountID) {
-		return
-	}
-
 	// Extract experiment metadata from opts and merge into the list of
 	// metadata entries to process. The SDK spreads group.experiment()
 	// variant context onto a sub-step's opts; emitting the metadata span
@@ -840,7 +881,7 @@ func (c checkpointer) processMetadata(
 				Update: metadata.Update{
 					RawUpdate: metadata.RawUpdate{
 						Kind:   expMd.Kind(),
-						Op:     expMd.Op(),
+						Op:     enums.MetadataOpcodeSet,
 						Values: values,
 					},
 				},
@@ -868,6 +909,8 @@ func (c checkpointer) processMetadata(
 			continue
 		}
 
+		var attrs *meta.SerializableAttrs
+
 		// Resolve the parent span based on metadata scope, matching the
 		// executor's behavior in createMetadataSpan.
 		var parent *meta.SpanReference
@@ -875,6 +918,9 @@ func (c checkpointer) processMetadata(
 		case enums.MetadataScopeRun:
 			parent = tracing.RunSpanRefFromMetadata(md)
 		case enums.MetadataScopeStep, enums.MetadataScopeStepAttempt:
+			attrs = tracing.GeneratorAttrs(&op)
+			attempt := 0 // always 0 for checkpointed steps, as they are always the first attempt.
+			meta.AddAttr(attrs, meta.Attrs.StepAttempt, &attempt)
 			// Use the step span created just before this call.
 			// Fall back to the run span if the step span was not captured.
 			if stepSpanRef != nil {
@@ -897,6 +943,13 @@ func (c checkpointer) processMetadata(
 			spanMd.Op(),
 			values,
 			spanMd.Scope,
+			tracing.WithMetadataSyncListeners(c.SyncLifecycleListeners...),
+			func(cfg *tracing.MetadataSpanConfig) { // TODO: cleaner attr passing
+				meta.CopyFrom(cfg.Attrs, attrs, meta.Attrs.StepID)
+				meta.CopyFrom(cfg.Attrs, attrs, meta.Attrs.StepAttempt)
+				meta.CopyFrom(cfg.Attrs, attrs, meta.Attrs.StepUserlandID)
+				meta.CopyFrom(cfg.Attrs, attrs, meta.Attrs.StepUserlandIndex)
+			},
 		)
 		if err != nil {
 			l.Warn("error creating metadata span in checkpoint",

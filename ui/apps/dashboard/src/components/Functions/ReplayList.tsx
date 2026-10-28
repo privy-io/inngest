@@ -28,12 +28,23 @@ const columns = [
     cell: (props) => {
       const status = props.getValue();
       return (
-        <StatusCell
-          status={status}
-          label={
-            status === ReplayStatus.Ended ? 'Queuing complete' : 'Queuing runs'
-          }
-        />
+        <div>
+          <StatusCell
+            status={status}
+            label={
+              status === ReplayStatus.Failed
+                ? 'Failed'
+                : status === ReplayStatus.Ended
+                ? 'Queuing complete'
+                : 'Queuing runs'
+            }
+          />
+          {props.row.original.error && (
+            <p className="text-error mt-1 max-w-sm whitespace-normal text-xs">
+              {props.row.original.error}
+            </p>
+          )}
+        </div>
       );
     },
     enableSorting: false,
@@ -96,11 +107,16 @@ const columns = [
 ];
 
 type Props = {
+  functionID?: string;
   functionSlug: string;
   disableNewReplay?: boolean;
 };
 
-export function ReplayList({ functionSlug, disableNewReplay = false }: Props) {
+export function ReplayList({
+  functionID,
+  functionSlug,
+  disableNewReplay = false,
+}: Props) {
   const environment = useEnvironment();
   const navigate = useNavigate();
   const [replayOpen, setReplayOpen] = useState(false);
@@ -135,7 +151,7 @@ export function ReplayList({ functionSlug, disableNewReplay = false }: Props) {
                 <Button
                   label="New replay"
                   onClick={() => setReplayOpen(true)}
-                  disabled={disableNewReplay}
+                  disabled={disableNewReplay || !functionID}
                   icon={<IconReplay />}
                   iconSide="left"
                 />
@@ -152,9 +168,10 @@ export function ReplayList({ functionSlug, disableNewReplay = false }: Props) {
           />
         }
       />
-      {replayOpen && (
+      {replayOpen && functionID && (
         <NewReplayModal
           isOpen={replayOpen}
+          functionID={functionID}
           functionSlug={functionSlug}
           onClose={() => setReplayOpen(false)}
         />

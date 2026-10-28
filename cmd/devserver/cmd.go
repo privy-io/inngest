@@ -2,6 +2,7 @@ package devserver
 
 import (
 	"github.com/inngest/inngest/pkg/api"
+	connectgrpc "github.com/inngest/inngest/pkg/connect/grpc"
 	"github.com/inngest/inngest/pkg/devserver"
 	"github.com/urfave/cli/v3"
 )
@@ -95,9 +96,33 @@ func Command() *cli.Command {
 			},
 			&cli.StringFlag{
 				Category: "Advanced",
+				Name:     "connect-gateway-grpc-ip",
+				Value:    connectgrpc.DefaultConnectGRPCIP,
+				Usage:    "IP address other instances use to reach the connect gateway gRPC server",
+			},
+			&cli.StringFlag{
+				Category: "Advanced",
+				Name:     "connect-executor-grpc-ip",
+				Value:    connectgrpc.DefaultConnectGRPCIP,
+				Usage:    "IP address other instances use to reach the connect executor gRPC server",
+			},
+			&cli.StringFlag{
+				Category: "Advanced",
 				Name:     "sqlite-dir",
 				Usage:    "Directory for where to write SQLite database.",
 				Hidden:   true,
+			},
+			&cli.BoolFlag{
+				Category: "Advanced",
+				Name:     "duckdb",
+				Usage:    "Enable the experimental DuckDB dual-write POC",
+				Value:    false,
+			},
+			&cli.BoolFlag{
+				Category: "Advanced",
+				Name:     "duckdb-reads",
+				Usage:    "Serve the GQL API and REST trace/run endpoints from DuckDB (requires --duckdb)",
+				Value:    false,
 			},
 			&cli.StringFlag{
 				Category: "Persistence",

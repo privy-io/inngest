@@ -35,13 +35,27 @@ var (
 	_ = metadata.Join
 )
 
+var filter_V2_Health_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
 func request_V2_Health_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq HealthRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_Health_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.Health(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -52,17 +66,43 @@ func local_request_V2_Health_0(ctx context.Context, marshaler runtime.Marshaler,
 		protoReq HealthRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_Health_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.Health(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_XSchemaOnly_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
 
 func request_V2_XSchemaOnly_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq HealthRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_XSchemaOnly_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.XSchemaOnly(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -73,9 +113,23 @@ func local_request_V2_XSchemaOnly_0(ctx context.Context, marshaler runtime.Marsh
 		protoReq HealthRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_XSchemaOnly_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.XSchemaOnly(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CreatePartnerAccount_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
 
 func request_V2_CreatePartnerAccount_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -87,6 +141,15 @@ func request_V2_CreatePartnerAccount_0(ctx context.Context, marshaler runtime.Ma
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreatePartnerAccount_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.CreatePartnerAccount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -100,9 +163,20 @@ func local_request_V2_CreatePartnerAccount_0(ctx context.Context, marshaler runt
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreatePartnerAccount_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.CreatePartnerAccount(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CreateEnv_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
 
 func request_V2_CreateEnv_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -114,6 +188,15 @@ func request_V2_CreateEnv_0(ctx context.Context, marshaler runtime.Marshaler, cl
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateEnv_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.CreateEnv(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -127,6 +210,15 @@ func local_request_V2_CreateEnv_0(ctx context.Context, marshaler runtime.Marshal
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateEnv_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.CreateEnv(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -138,6 +230,9 @@ func request_V2_FetchPartnerAccounts_0(ctx context.Context, marshaler runtime.Ma
 		protoReq FetchAccountsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -156,6 +251,9 @@ func local_request_V2_FetchPartnerAccounts_0(ctx context.Context, marshaler runt
 		protoReq FetchAccountsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -166,13 +264,27 @@ func local_request_V2_FetchPartnerAccounts_0(ctx context.Context, marshaler runt
 	return msg, metadata, err
 }
 
+var filter_V2_FetchAccount_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
 func request_V2_FetchAccount_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq FetchAccountRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_FetchAccount_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.FetchAccount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -183,6 +295,18 @@ func local_request_V2_FetchAccount_0(ctx context.Context, marshaler runtime.Mars
 		protoReq FetchAccountRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_FetchAccount_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.FetchAccount(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -194,6 +318,9 @@ func request_V2_FetchAccountEnvs_0(ctx context.Context, marshaler runtime.Marsha
 		protoReq FetchAccountEnvsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -212,6 +339,9 @@ func local_request_V2_FetchAccountEnvs_0(ctx context.Context, marshaler runtime.
 		protoReq FetchAccountEnvsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -229,6 +359,9 @@ func request_V2_FetchAccountEventKeys_0(ctx context.Context, marshaler runtime.M
 		protoReq FetchAccountEventKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -247,6 +380,9 @@ func local_request_V2_FetchAccountEventKeys_0(ctx context.Context, marshaler run
 		protoReq FetchAccountEventKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -264,6 +400,9 @@ func request_V2_FetchAccountSigningKeys_0(ctx context.Context, marshaler runtime
 		protoReq FetchAccountSigningKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -282,6 +421,9 @@ func local_request_V2_FetchAccountSigningKeys_0(ctx context.Context, marshaler r
 		protoReq FetchAccountSigningKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -291,6 +433,8 @@ func local_request_V2_FetchAccountSigningKeys_0(ctx context.Context, marshaler r
 	msg, err := server.FetchAccountSigningKeys(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CreateWebhook_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
 
 func request_V2_CreateWebhook_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -302,6 +446,15 @@ func request_V2_CreateWebhook_0(ctx context.Context, marshaler runtime.Marshaler
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateWebhook_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.CreateWebhook(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -315,6 +468,15 @@ func local_request_V2_CreateWebhook_0(ctx context.Context, marshaler runtime.Mar
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateWebhook_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.CreateWebhook(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -326,6 +488,9 @@ func request_V2_ListWebhooks_0(ctx context.Context, marshaler runtime.Marshaler,
 		protoReq ListWebhooksRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -344,6 +509,9 @@ func local_request_V2_ListWebhooks_0(ctx context.Context, marshaler runtime.Mars
 		protoReq ListWebhooksRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -353,6 +521,8 @@ func local_request_V2_ListWebhooks_0(ctx context.Context, marshaler runtime.Mars
 	msg, err := server.ListWebhooks(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_PatchEnv_0 = &utilities.DoubleArray{Encoding: map[string]int{"id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
 
 func request_V2_PatchEnv_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -373,6 +543,15 @@ func request_V2_PatchEnv_0(ctx context.Context, marshaler runtime.Marshaler, cli
 	protoReq.Id, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PatchEnv_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.PatchEnv(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -395,6 +574,15 @@ func local_request_V2_PatchEnv_0(ctx context.Context, marshaler runtime.Marshale
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PatchEnv_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.PatchEnv(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -407,6 +595,9 @@ func request_V2_GetFunctionRun_0(ctx context.Context, marshaler runtime.Marshale
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -434,6 +625,9 @@ func local_request_V2_GetFunctionRun_0(ctx context.Context, marshaler runtime.Ma
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["run_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "run_id")
@@ -459,6 +653,9 @@ func request_V2_ListRuns_0(ctx context.Context, marshaler runtime.Marshaler, cli
 		protoReq ListRunsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -477,6 +674,9 @@ func local_request_V2_ListRuns_0(ctx context.Context, marshaler runtime.Marshale
 		protoReq ListRunsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -495,6 +695,9 @@ func request_V2_ListFunctionRuns_0(ctx context.Context, marshaler runtime.Marsha
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -530,6 +733,9 @@ func local_request_V2_ListFunctionRuns_0(ctx context.Context, marshaler runtime.
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -564,6 +770,9 @@ func request_V2_GetEventRuns_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -591,6 +800,9 @@ func local_request_V2_GetEventRuns_0(ctx context.Context, marshaler runtime.Mars
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["event_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "event_id")
@@ -608,6 +820,89 @@ func local_request_V2_GetEventRuns_0(ctx context.Context, marshaler runtime.Mars
 	msg, err := server.GetEventRuns(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CreateReplay_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0, "function_id": 1}, Base: []int{1, 2, 3, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 3}}
+
+func request_V2_CreateReplay_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateReplayRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateReplay_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CreateReplay(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CreateReplay_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateReplayRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateReplay_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CreateReplay(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_Rerun_0 = &utilities.DoubleArray{Encoding: map[string]int{"run_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
 
 func request_V2_Rerun_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -628,6 +923,15 @@ func request_V2_Rerun_0(ctx context.Context, marshaler runtime.Marshaler, client
 	protoReq.RunId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_Rerun_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.Rerun(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -650,9 +954,20 @@ func local_request_V2_Rerun_0(ctx context.Context, marshaler runtime.Marshaler, 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_Rerun_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.Rerun(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CancelRun_0 = &utilities.DoubleArray{Encoding: map[string]int{"run_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
 
 func request_V2_CancelRun_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -673,6 +988,15 @@ func request_V2_CancelRun_0(ctx context.Context, marshaler runtime.Marshaler, cl
 	protoReq.RunId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CancelRun_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.CancelRun(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -695,9 +1019,20 @@ func local_request_V2_CancelRun_0(ctx context.Context, marshaler runtime.Marshal
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CancelRun_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.CancelRun(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_GetApp_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_V2_GetApp_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -705,6 +1040,9 @@ func request_V2_GetApp_0(ctx context.Context, marshaler runtime.Marshaler, clien
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -716,6 +1054,15 @@ func request_V2_GetApp_0(ctx context.Context, marshaler runtime.Marshaler, clien
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetApp_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := client.GetApp(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -726,6 +1073,9 @@ func local_request_V2_GetApp_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -733,6 +1083,15 @@ func local_request_V2_GetApp_0(ctx context.Context, marshaler runtime.Marshaler,
 	protoReq.AppId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetApp_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := server.GetApp(ctx, &protoReq)
 	return msg, metadata, err
@@ -745,6 +1104,9 @@ func request_V2_GetApps_0(ctx context.Context, marshaler runtime.Marshaler, clie
 		protoReq GetAppsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -763,6 +1125,9 @@ func local_request_V2_GetApps_0(ctx context.Context, marshaler runtime.Marshaler
 		protoReq GetAppsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -772,6 +1137,1603 @@ func local_request_V2_GetApps_0(ctx context.Context, marshaler runtime.Marshaler
 	msg, err := server.GetApps(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_CreateBuild_0 = &utilities.DoubleArray{Encoding: map[string]int{"name": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
+
+func request_V2_CreateBuild_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CreateBuild(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CreateBuild_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CreateBuild(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_CommitBuild_0 = &utilities.DoubleArray{Encoding: map[string]int{"name": 0, "build_id": 1}, Base: []int{1, 2, 3, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 3}}
+
+func request_V2_CommitBuild_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CommitBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	val, ok = pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CommitBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CommitBuild(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CommitBuild_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CommitBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["name"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
+	}
+	protoReq.Name, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+	val, ok = pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CommitBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CommitBuild(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_GetBuild_0 = &utilities.DoubleArray{Encoding: map[string]int{"build_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_GetBuild_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.GetBuild(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_GetBuild_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.GetBuild(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ListBuilds_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_V2_ListBuilds_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListBuildsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListBuilds_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.ListBuilds(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ListBuilds_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListBuildsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListBuilds_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.ListBuilds(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_CancelBuild_0 = &utilities.DoubleArray{Encoding: map[string]int{"build_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
+
+func request_V2_CancelBuild_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CancelBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CancelBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CancelBuild(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CancelBuild_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CancelBuildRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["build_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "build_id")
+	}
+	protoReq.BuildId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "build_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CancelBuild_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CancelBuild(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_CreateSandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
+
+func request_V2_CreateSandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateSandboxRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CreateSandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CreateSandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateSandboxRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CreateSandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ListSandboxes_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_V2_ListSandboxes_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxesRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxes_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListSandboxes(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ListSandboxes_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxesRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxes_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListSandboxes(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_GetSandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_GetSandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.GetSandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_GetSandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.GetSandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_DestroySandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_DestroySandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DestroySandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_DestroySandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.DestroySandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_DestroySandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DestroySandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_DestroySandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.DestroySandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_PauseSandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_PauseSandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PauseSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PauseSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.PauseSandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_PauseSandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PauseSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PauseSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.PauseSandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ResumeSandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_ResumeSandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResumeSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ResumeSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.ResumeSandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ResumeSandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResumeSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ResumeSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.ResumeSandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_CreateSandboxSnapshot_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
+
+func request_V2_CreateSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.CreateSandboxSnapshot(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_CreateSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq CreateSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.CreateSandboxSnapshot(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ListSandboxSnapshots_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_V2_ListSandboxSnapshots_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxSnapshotsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxSnapshots_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListSandboxSnapshots(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ListSandboxSnapshots_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxSnapshotsRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxSnapshots_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListSandboxSnapshots(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_GetSandboxSnapshot_0 = &utilities.DoubleArray{Encoding: map[string]int{"snapshot_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_GetSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["snapshot_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "snapshot_id")
+	}
+	protoReq.SnapshotId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "snapshot_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.GetSandboxSnapshot(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_GetSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["snapshot_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "snapshot_id")
+	}
+	protoReq.SnapshotId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "snapshot_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.GetSandboxSnapshot(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_DeleteSandboxSnapshot_0 = &utilities.DoubleArray{Encoding: map[string]int{"snapshot_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_DeleteSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DeleteSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["snapshot_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "snapshot_id")
+	}
+	protoReq.SnapshotId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "snapshot_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_DeleteSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.DeleteSandboxSnapshot(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_DeleteSandboxSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DeleteSandboxSnapshotRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["snapshot_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "snapshot_id")
+	}
+	protoReq.SnapshotId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "snapshot_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_DeleteSandboxSnapshot_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.DeleteSandboxSnapshot(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ExecSandbox_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
+
+func request_V2_ExecSandbox_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ExecSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ExecSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.ExecSandbox(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ExecSandbox_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ExecSandboxRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ExecSandbox_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.ExecSandbox(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_StreamSandboxLogs_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_StreamSandboxLogs_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (V2_StreamSandboxLogsClient, runtime.ServerMetadata, error) {
+	var (
+		protoReq StreamSandboxLogsRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_StreamSandboxLogs_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	stream, err := client.StreamSandboxLogs(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
+var filter_V2_WriteSandboxFile_0 = &utilities.DoubleArray{Encoding: map[string]int{"body": 0, "sandbox_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_WriteSandboxFile_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq WriteSandboxFileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Body); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_WriteSandboxFile_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.WriteSandboxFile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_WriteSandboxFile_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq WriteSandboxFileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Body); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_WriteSandboxFile_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.WriteSandboxFile(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ReadSandboxFile_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_ReadSandboxFile_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (V2_ReadSandboxFileClient, runtime.ServerMetadata, error) {
+	var (
+		protoReq ReadSandboxFileRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ReadSandboxFile_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	stream, err := client.ReadSandboxFile(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
+var filter_V2_StartSandboxProcess_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
+
+func request_V2_StartSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq StartSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_StartSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.StartSandboxProcess(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_StartSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq StartSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_StartSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.StartSandboxProcess(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ListSandboxProcesses_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_V2_ListSandboxProcesses_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxProcessesRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxProcesses_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.ListSandboxProcesses(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ListSandboxProcesses_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListSandboxProcessesRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListSandboxProcesses_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.ListSandboxProcesses(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_GetSandboxProcess_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0, "process_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_GetSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.GetSandboxProcess(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_GetSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.GetSandboxProcess(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_SignalSandboxProcess_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0, "process_id": 1}, Base: []int{1, 2, 3, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 3}}
+
+func request_V2_SignalSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SignalSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SignalSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.SignalSandboxProcess(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_SignalSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SignalSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SignalSandboxProcess_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.SignalSandboxProcess(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_WaitSandboxProcess_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0, "process_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_WaitSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq WaitSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_WaitSandboxProcess_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.WaitSandboxProcess(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_WaitSandboxProcess_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq WaitSandboxProcessRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_WaitSandboxProcess_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.WaitSandboxProcess(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_GetSandboxProcessOutput_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0, "process_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_GetSandboxProcessOutput_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxProcessOutputRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxProcessOutput_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.GetSandboxProcessOutput(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_GetSandboxProcessOutput_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetSandboxProcessOutputRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetSandboxProcessOutput_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.GetSandboxProcessOutput(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_StreamSandboxProcessOutput_0 = &utilities.DoubleArray{Encoding: map[string]int{"sandbox_id": 0, "process_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_StreamSandboxProcessOutput_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (V2_StreamSandboxProcessOutputClient, runtime.ServerMetadata, error) {
+	var (
+		protoReq StreamSandboxProcessOutputRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["sandbox_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "sandbox_id")
+	}
+	protoReq.SandboxId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "sandbox_id", err)
+	}
+	val, ok = pathParams["process_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "process_id")
+	}
+	protoReq.ProcessId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "process_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_StreamSandboxProcessOutput_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	stream, err := client.StreamSandboxProcessOutput(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
+var filter_V2_CreateScore_0 = &utilities.DoubleArray{Encoding: map[string]int{"scores": 0, "run_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 
 func request_V2_CreateScore_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -792,6 +2754,15 @@ func request_V2_CreateScore_0(ctx context.Context, marshaler runtime.Marshaler, 
 	protoReq.RunId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateScore_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.CreateScore(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -814,9 +2785,20 @@ func local_request_V2_CreateScore_0(ctx context.Context, marshaler runtime.Marsh
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "run_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_CreateScore_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.CreateScore(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_SyncApp_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 1, 2}}
 
 func request_V2_SyncApp_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -837,6 +2819,15 @@ func request_V2_SyncApp_0(ctx context.Context, marshaler runtime.Marshaler, clie
 	protoReq.AppId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SyncApp_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.SyncApp(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -859,6 +2850,15 @@ func local_request_V2_SyncApp_0(ctx context.Context, marshaler runtime.Marshaler
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SyncApp_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.SyncApp(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -871,6 +2871,9 @@ func request_V2_GetFunctionTrace_0(ctx context.Context, marshaler runtime.Marsha
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -898,6 +2901,9 @@ func local_request_V2_GetFunctionTrace_0(ctx context.Context, marshaler runtime.
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["run_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "run_id")
@@ -916,12 +2922,17 @@ func local_request_V2_GetFunctionTrace_0(ctx context.Context, marshaler runtime.
 	return msg, metadata, err
 }
 
+var filter_V2_GetFunction_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0, "function_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
 func request_V2_GetFunction_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetFunctionRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -941,6 +2952,15 @@ func request_V2_GetFunction_0(ctx context.Context, marshaler runtime.Marshaler, 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := client.GetFunction(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -951,6 +2971,9 @@ func local_request_V2_GetFunction_0(ctx context.Context, marshaler runtime.Marsh
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -967,7 +2990,178 @@ func local_request_V2_GetFunction_0(ctx context.Context, marshaler runtime.Marsh
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_GetFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.GetFunction(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_PauseFunction_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0, "function_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_PauseFunction_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PauseFunctionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PauseFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.PauseFunction(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_PauseFunction_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PauseFunctionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_PauseFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.PauseFunction(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_ResumeFunction_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0, "function_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_V2_ResumeFunction_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResumeFunctionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ResumeFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.ResumeFunction(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_ResumeFunction_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResumeFunctionRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+	val, ok := pathParams["app_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
+	}
+	protoReq.AppId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app_id", err)
+	}
+	val, ok = pathParams["function_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "function_id")
+	}
+	protoReq.FunctionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ResumeFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.ResumeFunction(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -979,6 +3173,9 @@ func request_V2_GetFunctions_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1006,6 +3203,9 @@ func local_request_V2_GetFunctions_0(ctx context.Context, marshaler runtime.Mars
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -1023,6 +3223,55 @@ func local_request_V2_GetFunctions_0(ctx context.Context, marshaler runtime.Mars
 	msg, err := server.GetFunctions(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_SendEvent_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
+
+func request_V2_SendEvent_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SendEventRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SendEvent_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := client.SendEvent(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_V2_SendEvent_0(ctx context.Context, marshaler runtime.Marshaler, server V2Server, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SendEventRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_SendEvent_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
+	msg, err := server.SendEvent(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_V2_InvokeFunction_0 = &utilities.DoubleArray{Encoding: map[string]int{"app_id": 0, "function_id": 1}, Base: []int{1, 2, 3, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 3}}
 
 func request_V2_InvokeFunction_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -1051,6 +3300,15 @@ func request_V2_InvokeFunction_0(ctx context.Context, marshaler runtime.Marshale
 	protoReq.FunctionId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_InvokeFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.InvokeFunction(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1081,17 +3339,40 @@ func local_request_V2_InvokeFunction_0(ctx context.Context, marshaler runtime.Ma
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "function_id", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_InvokeFunction_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.InvokeFunction(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_ListInsightsTables_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
 
 func request_V2_ListInsightsTables_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq ListInsightsTablesRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListInsightsTables_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.ListInsightsTables(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1102,6 +3383,18 @@ func local_request_V2_ListInsightsTables_0(ctx context.Context, marshaler runtim
 		protoReq ListInsightsTablesRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_ListInsightsTables_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.ListInsightsTables(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -1113,6 +3406,9 @@ func request_V2_ListInsightsEventSchemas_0(ctx context.Context, marshaler runtim
 		protoReq ListInsightsEventSchemasRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1131,6 +3427,9 @@ func local_request_V2_ListInsightsEventSchemas_0(ctx context.Context, marshaler 
 		protoReq ListInsightsEventSchemasRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -1140,6 +3439,8 @@ func local_request_V2_ListInsightsEventSchemas_0(ctx context.Context, marshaler 
 	msg, err := server.ListInsightsEventSchemas(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_QueryInsightsPrompt_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
 
 func request_V2_QueryInsightsPrompt_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -1151,6 +3452,15 @@ func request_V2_QueryInsightsPrompt_0(ctx context.Context, marshaler runtime.Mar
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_QueryInsightsPrompt_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.QueryInsightsPrompt(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1164,9 +3474,20 @@ func local_request_V2_QueryInsightsPrompt_0(ctx context.Context, marshaler runti
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_QueryInsightsPrompt_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.QueryInsightsPrompt(ctx, &protoReq)
 	return msg, metadata, err
 }
+
+var filter_V2_QueryInsights_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int{1, 0}, Check: []int{0, 1}}
 
 func request_V2_QueryInsights_0(ctx context.Context, marshaler runtime.Marshaler, client V2Client, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -1178,6 +3499,15 @@ func request_V2_QueryInsights_0(ctx context.Context, marshaler runtime.Marshaler
 	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
+	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_QueryInsights_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
 	}
 	msg, err := client.QueryInsights(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1191,6 +3521,15 @@ func local_request_V2_QueryInsights_0(ctx context.Context, marshaler runtime.Mar
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
+
+	if req.URL.RawQuery != "" {
+		if err := req.ParseForm(); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_V2_QueryInsights_0); err != nil {
+			return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+	}
 	msg, err := server.QueryInsights(ctx, &protoReq)
 	return msg, metadata, err
 }
@@ -1202,6 +3541,9 @@ func request_V2_ListExperiments_0(ctx context.Context, marshaler runtime.Marshal
 		protoReq ListExperimentsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1220,6 +3562,9 @@ func local_request_V2_ListExperiments_0(ctx context.Context, marshaler runtime.M
 		protoReq ListExperimentsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -1238,6 +3583,9 @@ func request_V2_ListExperiments_1(ctx context.Context, marshaler runtime.Marshal
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1273,6 +3621,9 @@ func local_request_V2_ListExperiments_1(ctx context.Context, marshaler runtime.M
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -1307,6 +3658,9 @@ func request_V2_GetExperiment_0(ctx context.Context, marshaler runtime.Marshaler
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1350,6 +3704,9 @@ func local_request_V2_GetExperiment_0(ctx context.Context, marshaler runtime.Mar
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["app_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app_id")
@@ -1391,6 +3748,9 @@ func request_V2_ListSessionKeys_0(ctx context.Context, marshaler runtime.Marshal
 		protoReq ListSessionKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1409,6 +3769,9 @@ func local_request_V2_ListSessionKeys_0(ctx context.Context, marshaler runtime.M
 		protoReq ListSessionKeysRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -1427,6 +3790,9 @@ func request_V2_ListSessions_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1454,6 +3820,9 @@ func local_request_V2_ListSessions_0(ctx context.Context, marshaler runtime.Mars
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["session_key"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_key")
@@ -1480,6 +3849,9 @@ func request_V2_ListSessionRuns_0(ctx context.Context, marshaler runtime.Marshal
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
@@ -1515,6 +3887,9 @@ func local_request_V2_ListSessionRuns_0(ctx context.Context, marshaler runtime.M
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil && req.Body != http.NoBody && req.ContentLength != 0 && !runtime.HTTPPathLengthFallback(req.Context()) {
+		return nil, metadata, status.Error(codes.InvalidArgument, "request body is not allowed for this HTTP binding")
+	}
 	val, ok := pathParams["session_key"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_key")
@@ -1867,6 +4242,26 @@ func RegisterV2HandlerServer(ctx context.Context, mux *runtime.ServeMux, server 
 		}
 		forward_V2_GetEventRuns_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateReplay_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CreateReplay", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/replays"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CreateReplay_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateReplay_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_V2_Rerun_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1946,6 +4341,487 @@ func RegisterV2HandlerServer(ctx context.Context, mux *runtime.ServeMux, server 
 			return
 		}
 		forward_V2_GetApps_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CreateBuild", runtime.WithHTTPPathPattern("/builds/{name}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CreateBuild_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CommitBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CommitBuild", runtime.WithHTTPPathPattern("/builds/{name}/{build_id}/commit"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CommitBuild_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CommitBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/GetBuild", runtime.WithHTTPPathPattern("/builds/{build_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_GetBuild_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListBuilds_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ListBuilds", runtime.WithHTTPPathPattern("/builds"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ListBuilds_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListBuilds_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CancelBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CancelBuild", runtime.WithHTTPPathPattern("/builds/{build_id}/cancel"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CancelBuild_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CancelBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CreateSandbox", runtime.WithHTTPPathPattern("/sandboxes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CreateSandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ListSandboxes", runtime.WithHTTPPathPattern("/sandboxes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ListSandboxes_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/GetSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_GetSandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_V2_DestroySandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/DestroySandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_DestroySandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_DestroySandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_PauseSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/PauseSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/pause"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_PauseSandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_PauseSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ResumeSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ResumeSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/resume"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ResumeSandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ResumeSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/CreateSandboxSnapshot", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/snapshots"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_CreateSandboxSnapshot_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxSnapshots_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ListSandboxSnapshots", runtime.WithHTTPPathPattern("/snapshots"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ListSandboxSnapshots_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxSnapshots_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/GetSandboxSnapshot", runtime.WithHTTPPathPattern("/snapshots/{snapshot_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_GetSandboxSnapshot_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_V2_DeleteSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/DeleteSandboxSnapshot", runtime.WithHTTPPathPattern("/snapshots/{snapshot_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_DeleteSandboxSnapshot_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_DeleteSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ExecSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ExecSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/exec"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ExecSandbox_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ExecSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	mux.Handle(http.MethodGet, pattern_V2_StreamSandboxLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+	mux.Handle(http.MethodPut, pattern_V2_WriteSandboxFile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/WriteSandboxFile", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/files"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_WriteSandboxFile_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_WriteSandboxFile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	mux.Handle(http.MethodGet, pattern_V2_ReadSandboxFile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+	mux.Handle(http.MethodPost, pattern_V2_StartSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/StartSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_StartSandboxProcess_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_StartSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxProcesses_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ListSandboxProcesses", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ListSandboxProcesses_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxProcesses_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/GetSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_GetSandboxProcess_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_SignalSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/SignalSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/signals"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_SignalSandboxProcess_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_SignalSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_WaitSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/WaitSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/wait"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_WaitSandboxProcess_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_WaitSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxProcessOutput_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/GetSandboxProcessOutput", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/output"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_GetSandboxProcessOutput_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxProcessOutput_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	mux.Handle(http.MethodGet, pattern_V2_StreamSandboxProcessOutput_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
 	})
 	mux.Handle(http.MethodPost, pattern_V2_CreateScore_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2027,6 +4903,46 @@ func RegisterV2HandlerServer(ctx context.Context, mux *runtime.ServeMux, server 
 		}
 		forward_V2_GetFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_V2_PauseFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/PauseFunction", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/pause"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_PauseFunction_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_PauseFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ResumeFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/ResumeFunction", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/resume"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_ResumeFunction_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ResumeFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_V2_GetFunctions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2046,6 +4962,26 @@ func RegisterV2HandlerServer(ctx context.Context, mux *runtime.ServeMux, server 
 			return
 		}
 		forward_V2_GetFunctions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_SendEvent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v2.V2/SendEvent", runtime.WithHTTPPathPattern("/events"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_V2_SendEvent_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_SendEvent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_V2_InvokeFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2579,6 +5515,23 @@ func RegisterV2HandlerClient(ctx context.Context, mux *runtime.ServeMux, client 
 		}
 		forward_V2_GetEventRuns_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateReplay_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CreateReplay", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/replays"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CreateReplay_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateReplay_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_V2_Rerun_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2646,6 +5599,448 @@ func RegisterV2HandlerClient(ctx context.Context, mux *runtime.ServeMux, client 
 			return
 		}
 		forward_V2_GetApps_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CreateBuild", runtime.WithHTTPPathPattern("/builds/{name}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CreateBuild_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CommitBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CommitBuild", runtime.WithHTTPPathPattern("/builds/{name}/{build_id}/commit"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CommitBuild_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CommitBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/GetBuild", runtime.WithHTTPPathPattern("/builds/{build_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_GetBuild_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListBuilds_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ListBuilds", runtime.WithHTTPPathPattern("/builds"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ListBuilds_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListBuilds_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CancelBuild_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CancelBuild", runtime.WithHTTPPathPattern("/builds/{build_id}/cancel"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CancelBuild_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CancelBuild_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CreateSandbox", runtime.WithHTTPPathPattern("/sandboxes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CreateSandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ListSandboxes", runtime.WithHTTPPathPattern("/sandboxes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ListSandboxes_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/GetSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_GetSandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_V2_DestroySandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/DestroySandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_DestroySandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_DestroySandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_PauseSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/PauseSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/pause"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_PauseSandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_PauseSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ResumeSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ResumeSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/resume"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ResumeSandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ResumeSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_CreateSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/CreateSandboxSnapshot", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/snapshots"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_CreateSandboxSnapshot_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_CreateSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxSnapshots_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ListSandboxSnapshots", runtime.WithHTTPPathPattern("/snapshots"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ListSandboxSnapshots_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxSnapshots_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/GetSandboxSnapshot", runtime.WithHTTPPathPattern("/snapshots/{snapshot_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_GetSandboxSnapshot_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_V2_DeleteSandboxSnapshot_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/DeleteSandboxSnapshot", runtime.WithHTTPPathPattern("/snapshots/{snapshot_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_DeleteSandboxSnapshot_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_DeleteSandboxSnapshot_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ExecSandbox_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ExecSandbox", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/exec"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ExecSandbox_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ExecSandbox_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_StreamSandboxLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/StreamSandboxLogs", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/logs"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_StreamSandboxLogs_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_StreamSandboxLogs_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPut, pattern_V2_WriteSandboxFile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/WriteSandboxFile", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/files"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_WriteSandboxFile_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_WriteSandboxFile_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ReadSandboxFile_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ReadSandboxFile", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/files"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ReadSandboxFile_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ReadSandboxFile_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_StartSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/StartSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_StartSandboxProcess_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_StartSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_ListSandboxProcesses_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ListSandboxProcesses", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ListSandboxProcesses_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ListSandboxProcesses_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/GetSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_GetSandboxProcess_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_SignalSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/SignalSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/signals"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_SignalSandboxProcess_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_SignalSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_WaitSandboxProcess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/WaitSandboxProcess", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/wait"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_WaitSandboxProcess_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_WaitSandboxProcess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_GetSandboxProcessOutput_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/GetSandboxProcessOutput", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/output"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_GetSandboxProcessOutput_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_GetSandboxProcessOutput_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_V2_StreamSandboxProcessOutput_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/StreamSandboxProcessOutput", runtime.WithHTTPPathPattern("/sandboxes/{sandbox_id}/processes/{process_id}/output/stream"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_StreamSandboxProcessOutput_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_StreamSandboxProcessOutput_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_V2_CreateScore_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2715,6 +6110,40 @@ func RegisterV2HandlerClient(ctx context.Context, mux *runtime.ServeMux, client 
 		}
 		forward_V2_GetFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_V2_PauseFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/PauseFunction", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/pause"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_PauseFunction_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_PauseFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_ResumeFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/ResumeFunction", runtime.WithHTTPPathPattern("/apps/{app_id}/functions/{function_id}/resume"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_ResumeFunction_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_ResumeFunction_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_V2_GetFunctions_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2731,6 +6160,23 @@ func RegisterV2HandlerClient(ctx context.Context, mux *runtime.ServeMux, client 
 			return
 		}
 		forward_V2_GetFunctions_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_V2_SendEvent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v2.V2/SendEvent", runtime.WithHTTPPathPattern("/events"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_V2_SendEvent_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_V2_SendEvent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_V2_InvokeFunction_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2923,79 +6369,139 @@ func RegisterV2HandlerClient(ctx context.Context, mux *runtime.ServeMux, client 
 }
 
 var (
-	pattern_V2_Health_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"health"}, ""))
-	pattern_V2_XSchemaOnly_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"_internal", "schema-only"}, ""))
-	pattern_V2_CreatePartnerAccount_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"partner", "accounts"}, ""))
-	pattern_V2_CreateEnv_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"envs"}, ""))
-	pattern_V2_FetchPartnerAccounts_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"partner", "accounts"}, ""))
-	pattern_V2_FetchAccount_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"account"}, ""))
-	pattern_V2_FetchAccountEnvs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"envs"}, ""))
-	pattern_V2_FetchAccountEventKeys_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"keys", "events"}, ""))
-	pattern_V2_FetchAccountSigningKeys_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"keys", "signing"}, ""))
-	pattern_V2_CreateWebhook_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"env", "webhooks"}, ""))
-	pattern_V2_ListWebhooks_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"env", "webhooks"}, ""))
-	pattern_V2_PatchEnv_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"envs", "id"}, ""))
-	pattern_V2_GetFunctionRun_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"runs", "run_id"}, ""))
-	pattern_V2_ListRuns_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"runs"}, ""))
-	pattern_V2_ListFunctionRuns_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "runs"}, ""))
-	pattern_V2_GetEventRuns_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"events", "event_id", "runs"}, ""))
-	pattern_V2_Rerun_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "rerun"}, ""))
-	pattern_V2_CancelRun_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "cancel"}, ""))
-	pattern_V2_GetApp_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"apps", "app_id"}, ""))
-	pattern_V2_GetApps_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"apps"}, ""))
-	pattern_V2_CreateScore_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "scores"}, ""))
-	pattern_V2_SyncApp_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"apps", "app_id", "syncs"}, ""))
-	pattern_V2_GetFunctionTrace_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "trace"}, ""))
-	pattern_V2_GetFunction_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apps", "app_id", "functions", "function_id"}, ""))
-	pattern_V2_GetFunctions_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"apps", "app_id", "functions"}, ""))
-	pattern_V2_InvokeFunction_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "invoke"}, ""))
-	pattern_V2_ListInsightsTables_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"insights", "tables"}, ""))
-	pattern_V2_ListInsightsEventSchemas_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"insights", "events", "schemas"}, ""))
-	pattern_V2_QueryInsightsPrompt_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"insights", "query", "prompt"}, ""))
-	pattern_V2_QueryInsights_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"insights", "query"}, ""))
-	pattern_V2_ListExperiments_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"experiments"}, ""))
-	pattern_V2_ListExperiments_1          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "experiments"}, ""))
-	pattern_V2_GetExperiment_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 3, 0, 4, 1, 5, 5}, []string{"apps", "app_id", "functions", "function_id", "experiments", "experiment_id"}, ""))
-	pattern_V2_ListSessionKeys_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"sessions"}, ""))
-	pattern_V2_ListSessions_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"sessions", "session_key"}, ""))
-	pattern_V2_ListSessionRuns_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 3, 0, 4, 1, 5, 2, 2, 3}, []string{"sessions", "session_key", "session_id", "runs"}, ""))
+	pattern_V2_Health_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"health"}, ""))
+	pattern_V2_XSchemaOnly_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"_internal", "schema-only"}, ""))
+	pattern_V2_CreatePartnerAccount_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"partner", "accounts"}, ""))
+	pattern_V2_CreateEnv_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"envs"}, ""))
+	pattern_V2_FetchPartnerAccounts_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"partner", "accounts"}, ""))
+	pattern_V2_FetchAccount_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"account"}, ""))
+	pattern_V2_FetchAccountEnvs_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"envs"}, ""))
+	pattern_V2_FetchAccountEventKeys_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"keys", "events"}, ""))
+	pattern_V2_FetchAccountSigningKeys_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"keys", "signing"}, ""))
+	pattern_V2_CreateWebhook_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"env", "webhooks"}, ""))
+	pattern_V2_ListWebhooks_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"env", "webhooks"}, ""))
+	pattern_V2_PatchEnv_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"envs", "id"}, ""))
+	pattern_V2_GetFunctionRun_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"runs", "run_id"}, ""))
+	pattern_V2_ListRuns_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"runs"}, ""))
+	pattern_V2_ListFunctionRuns_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "runs"}, ""))
+	pattern_V2_GetEventRuns_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"events", "event_id", "runs"}, ""))
+	pattern_V2_CreateReplay_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "replays"}, ""))
+	pattern_V2_Rerun_0                      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "rerun"}, ""))
+	pattern_V2_CancelRun_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "cancel"}, ""))
+	pattern_V2_GetApp_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"apps", "app_id"}, ""))
+	pattern_V2_GetApps_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"apps"}, ""))
+	pattern_V2_CreateBuild_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"builds", "name"}, ""))
+	pattern_V2_CommitBuild_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"builds", "name", "build_id", "commit"}, ""))
+	pattern_V2_GetBuild_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"builds", "build_id"}, ""))
+	pattern_V2_ListBuilds_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"builds"}, ""))
+	pattern_V2_CancelBuild_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"builds", "build_id", "cancel"}, ""))
+	pattern_V2_CreateSandbox_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"sandboxes"}, ""))
+	pattern_V2_ListSandboxes_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"sandboxes"}, ""))
+	pattern_V2_GetSandbox_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"sandboxes", "sandbox_id"}, ""))
+	pattern_V2_DestroySandbox_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"sandboxes", "sandbox_id"}, ""))
+	pattern_V2_PauseSandbox_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "pause"}, ""))
+	pattern_V2_ResumeSandbox_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "resume"}, ""))
+	pattern_V2_CreateSandboxSnapshot_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "snapshots"}, ""))
+	pattern_V2_ListSandboxSnapshots_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"snapshots"}, ""))
+	pattern_V2_GetSandboxSnapshot_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"snapshots", "snapshot_id"}, ""))
+	pattern_V2_DeleteSandboxSnapshot_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"snapshots", "snapshot_id"}, ""))
+	pattern_V2_ExecSandbox_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "exec"}, ""))
+	pattern_V2_StreamSandboxLogs_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "logs"}, ""))
+	pattern_V2_WriteSandboxFile_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "files"}, ""))
+	pattern_V2_ReadSandboxFile_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "files"}, ""))
+	pattern_V2_StartSandboxProcess_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "processes"}, ""))
+	pattern_V2_ListSandboxProcesses_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"sandboxes", "sandbox_id", "processes"}, ""))
+	pattern_V2_GetSandboxProcess_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"sandboxes", "sandbox_id", "processes", "process_id"}, ""))
+	pattern_V2_SignalSandboxProcess_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"sandboxes", "sandbox_id", "processes", "process_id", "signals"}, ""))
+	pattern_V2_WaitSandboxProcess_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"sandboxes", "sandbox_id", "processes", "process_id", "wait"}, ""))
+	pattern_V2_GetSandboxProcessOutput_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"sandboxes", "sandbox_id", "processes", "process_id", "output"}, ""))
+	pattern_V2_StreamSandboxProcessOutput_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 2, 5}, []string{"sandboxes", "sandbox_id", "processes", "process_id", "output", "stream"}, ""))
+	pattern_V2_CreateScore_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "scores"}, ""))
+	pattern_V2_SyncApp_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"apps", "app_id", "syncs"}, ""))
+	pattern_V2_GetFunctionTrace_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"runs", "run_id", "trace"}, ""))
+	pattern_V2_GetFunction_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apps", "app_id", "functions", "function_id"}, ""))
+	pattern_V2_PauseFunction_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "pause"}, ""))
+	pattern_V2_ResumeFunction_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "resume"}, ""))
+	pattern_V2_GetFunctions_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2}, []string{"apps", "app_id", "functions"}, ""))
+	pattern_V2_SendEvent_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"events"}, ""))
+	pattern_V2_InvokeFunction_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "invoke"}, ""))
+	pattern_V2_ListInsightsTables_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"insights", "tables"}, ""))
+	pattern_V2_ListInsightsEventSchemas_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"insights", "events", "schemas"}, ""))
+	pattern_V2_QueryInsightsPrompt_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"insights", "query", "prompt"}, ""))
+	pattern_V2_QueryInsights_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"insights", "query"}, ""))
+	pattern_V2_ListExperiments_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"experiments"}, ""))
+	pattern_V2_ListExperiments_1            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"apps", "app_id", "functions", "function_id", "experiments"}, ""))
+	pattern_V2_GetExperiment_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 3, 0, 4, 1, 5, 5}, []string{"apps", "app_id", "functions", "function_id", "experiments", "experiment_id"}, ""))
+	pattern_V2_ListSessionKeys_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"sessions"}, ""))
+	pattern_V2_ListSessions_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"sessions", "session_key"}, ""))
+	pattern_V2_ListSessionRuns_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1, 3, 0, 4, 1, 5, 2, 2, 3}, []string{"sessions", "session_key", "session_id", "runs"}, ""))
 )
 
 var (
-	forward_V2_Health_0                   = runtime.ForwardResponseMessage
-	forward_V2_XSchemaOnly_0              = runtime.ForwardResponseMessage
-	forward_V2_CreatePartnerAccount_0     = runtime.ForwardResponseMessage
-	forward_V2_CreateEnv_0                = runtime.ForwardResponseMessage
-	forward_V2_FetchPartnerAccounts_0     = runtime.ForwardResponseMessage
-	forward_V2_FetchAccount_0             = runtime.ForwardResponseMessage
-	forward_V2_FetchAccountEnvs_0         = runtime.ForwardResponseMessage
-	forward_V2_FetchAccountEventKeys_0    = runtime.ForwardResponseMessage
-	forward_V2_FetchAccountSigningKeys_0  = runtime.ForwardResponseMessage
-	forward_V2_CreateWebhook_0            = runtime.ForwardResponseMessage
-	forward_V2_ListWebhooks_0             = runtime.ForwardResponseMessage
-	forward_V2_PatchEnv_0                 = runtime.ForwardResponseMessage
-	forward_V2_GetFunctionRun_0           = runtime.ForwardResponseMessage
-	forward_V2_ListRuns_0                 = runtime.ForwardResponseMessage
-	forward_V2_ListFunctionRuns_0         = runtime.ForwardResponseMessage
-	forward_V2_GetEventRuns_0             = runtime.ForwardResponseMessage
-	forward_V2_Rerun_0                    = runtime.ForwardResponseMessage
-	forward_V2_CancelRun_0                = runtime.ForwardResponseMessage
-	forward_V2_GetApp_0                   = runtime.ForwardResponseMessage
-	forward_V2_GetApps_0                  = runtime.ForwardResponseMessage
-	forward_V2_CreateScore_0              = runtime.ForwardResponseMessage
-	forward_V2_SyncApp_0                  = runtime.ForwardResponseMessage
-	forward_V2_GetFunctionTrace_0         = runtime.ForwardResponseMessage
-	forward_V2_GetFunction_0              = runtime.ForwardResponseMessage
-	forward_V2_GetFunctions_0             = runtime.ForwardResponseMessage
-	forward_V2_InvokeFunction_0           = runtime.ForwardResponseMessage
-	forward_V2_ListInsightsTables_0       = runtime.ForwardResponseMessage
-	forward_V2_ListInsightsEventSchemas_0 = runtime.ForwardResponseMessage
-	forward_V2_QueryInsightsPrompt_0      = runtime.ForwardResponseMessage
-	forward_V2_QueryInsights_0            = runtime.ForwardResponseMessage
-	forward_V2_ListExperiments_0          = runtime.ForwardResponseMessage
-	forward_V2_ListExperiments_1          = runtime.ForwardResponseMessage
-	forward_V2_GetExperiment_0            = runtime.ForwardResponseMessage
-	forward_V2_ListSessionKeys_0          = runtime.ForwardResponseMessage
-	forward_V2_ListSessions_0             = runtime.ForwardResponseMessage
-	forward_V2_ListSessionRuns_0          = runtime.ForwardResponseMessage
+	forward_V2_Health_0                     = runtime.ForwardResponseMessage
+	forward_V2_XSchemaOnly_0                = runtime.ForwardResponseMessage
+	forward_V2_CreatePartnerAccount_0       = runtime.ForwardResponseMessage
+	forward_V2_CreateEnv_0                  = runtime.ForwardResponseMessage
+	forward_V2_FetchPartnerAccounts_0       = runtime.ForwardResponseMessage
+	forward_V2_FetchAccount_0               = runtime.ForwardResponseMessage
+	forward_V2_FetchAccountEnvs_0           = runtime.ForwardResponseMessage
+	forward_V2_FetchAccountEventKeys_0      = runtime.ForwardResponseMessage
+	forward_V2_FetchAccountSigningKeys_0    = runtime.ForwardResponseMessage
+	forward_V2_CreateWebhook_0              = runtime.ForwardResponseMessage
+	forward_V2_ListWebhooks_0               = runtime.ForwardResponseMessage
+	forward_V2_PatchEnv_0                   = runtime.ForwardResponseMessage
+	forward_V2_GetFunctionRun_0             = runtime.ForwardResponseMessage
+	forward_V2_ListRuns_0                   = runtime.ForwardResponseMessage
+	forward_V2_ListFunctionRuns_0           = runtime.ForwardResponseMessage
+	forward_V2_GetEventRuns_0               = runtime.ForwardResponseMessage
+	forward_V2_CreateReplay_0               = runtime.ForwardResponseMessage
+	forward_V2_Rerun_0                      = runtime.ForwardResponseMessage
+	forward_V2_CancelRun_0                  = runtime.ForwardResponseMessage
+	forward_V2_GetApp_0                     = runtime.ForwardResponseMessage
+	forward_V2_GetApps_0                    = runtime.ForwardResponseMessage
+	forward_V2_CreateBuild_0                = runtime.ForwardResponseMessage
+	forward_V2_CommitBuild_0                = runtime.ForwardResponseMessage
+	forward_V2_GetBuild_0                   = runtime.ForwardResponseMessage
+	forward_V2_ListBuilds_0                 = runtime.ForwardResponseMessage
+	forward_V2_CancelBuild_0                = runtime.ForwardResponseMessage
+	forward_V2_CreateSandbox_0              = runtime.ForwardResponseMessage
+	forward_V2_ListSandboxes_0              = runtime.ForwardResponseMessage
+	forward_V2_GetSandbox_0                 = runtime.ForwardResponseMessage
+	forward_V2_DestroySandbox_0             = runtime.ForwardResponseMessage
+	forward_V2_PauseSandbox_0               = runtime.ForwardResponseMessage
+	forward_V2_ResumeSandbox_0              = runtime.ForwardResponseMessage
+	forward_V2_CreateSandboxSnapshot_0      = runtime.ForwardResponseMessage
+	forward_V2_ListSandboxSnapshots_0       = runtime.ForwardResponseMessage
+	forward_V2_GetSandboxSnapshot_0         = runtime.ForwardResponseMessage
+	forward_V2_DeleteSandboxSnapshot_0      = runtime.ForwardResponseMessage
+	forward_V2_ExecSandbox_0                = runtime.ForwardResponseMessage
+	forward_V2_StreamSandboxLogs_0          = runtime.ForwardResponseStream
+	forward_V2_WriteSandboxFile_0           = runtime.ForwardResponseMessage
+	forward_V2_ReadSandboxFile_0            = runtime.ForwardResponseStream
+	forward_V2_StartSandboxProcess_0        = runtime.ForwardResponseMessage
+	forward_V2_ListSandboxProcesses_0       = runtime.ForwardResponseMessage
+	forward_V2_GetSandboxProcess_0          = runtime.ForwardResponseMessage
+	forward_V2_SignalSandboxProcess_0       = runtime.ForwardResponseMessage
+	forward_V2_WaitSandboxProcess_0         = runtime.ForwardResponseMessage
+	forward_V2_GetSandboxProcessOutput_0    = runtime.ForwardResponseMessage
+	forward_V2_StreamSandboxProcessOutput_0 = runtime.ForwardResponseStream
+	forward_V2_CreateScore_0                = runtime.ForwardResponseMessage
+	forward_V2_SyncApp_0                    = runtime.ForwardResponseMessage
+	forward_V2_GetFunctionTrace_0           = runtime.ForwardResponseMessage
+	forward_V2_GetFunction_0                = runtime.ForwardResponseMessage
+	forward_V2_PauseFunction_0              = runtime.ForwardResponseMessage
+	forward_V2_ResumeFunction_0             = runtime.ForwardResponseMessage
+	forward_V2_GetFunctions_0               = runtime.ForwardResponseMessage
+	forward_V2_SendEvent_0                  = runtime.ForwardResponseMessage
+	forward_V2_InvokeFunction_0             = runtime.ForwardResponseMessage
+	forward_V2_ListInsightsTables_0         = runtime.ForwardResponseMessage
+	forward_V2_ListInsightsEventSchemas_0   = runtime.ForwardResponseMessage
+	forward_V2_QueryInsightsPrompt_0        = runtime.ForwardResponseMessage
+	forward_V2_QueryInsights_0              = runtime.ForwardResponseMessage
+	forward_V2_ListExperiments_0            = runtime.ForwardResponseMessage
+	forward_V2_ListExperiments_1            = runtime.ForwardResponseMessage
+	forward_V2_GetExperiment_0              = runtime.ForwardResponseMessage
+	forward_V2_ListSessionKeys_0            = runtime.ForwardResponseMessage
+	forward_V2_ListSessions_0               = runtime.ForwardResponseMessage
+	forward_V2_ListSessionRuns_0            = runtime.ForwardResponseMessage
 )

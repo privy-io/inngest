@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,6 +18,7 @@ import (
 	dbsqlite "github.com/inngest/inngest/pkg/db/sqlite"
 	"github.com/inngest/inngest/pkg/enums"
 	"github.com/inngest/inngest/pkg/tracing/meta"
+	"github.com/inngest/inngest/pkg/tracing/metadata"
 	"github.com/inngest/inngest/tests/testutil"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
@@ -1115,6 +1117,22 @@ func TestCQRSGetFunctions(t *testing.T) {
 		for _, expectedID := range fnIDs {
 			assert.True(t, foundFnIDs[expectedID], "Expected function ID %s to be found", expectedID)
 		}
+	})
+
+	t.Run("get functions by slugs", func(t *testing.T) {
+		err := cm.DeleteFunctionsByIDs(ctx, []uuid.UUID{fnIDs[1]})
+		require.NoError(t, err)
+
+		functions, err := cm.GetFunctionsBySlugs(ctx, []string{"test-function-1", "test-function-2", "test-function-3", "missing-function"})
+		require.NoError(t, err)
+		require.Len(t, functions, 2)
+
+		functionsBySlug := make(map[string]*cqrs.Function, len(functions))
+		for _, fn := range functions {
+			functionsBySlug[fn.Slug] = fn
+		}
+		assert.Equal(t, fnIDs[0], functionsBySlug["test-function-1"].ID)
+		assert.Equal(t, fnIDs[2], functionsBySlug["test-function-3"].ID)
 	})
 }
 
@@ -2358,6 +2376,29 @@ func TestCQRSGetSpanRunsCELJoinQualifiesTenantFilters(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
+func TestCQRSGetSpanRunsRejectsUnsupportedCELPredicates(t *testing.T) {
+	cm, cleanup := initCQRS(t)
+	defer cleanup()
+
+	for _, expression := range []string{
+		`foo.bar == 1`,
+		`event.data.tenant == "target" || foo.bar == 1`,
+	} {
+		t.Run(expression, func(t *testing.T) {
+			_, err := cm.GetTraceRuns(t.Context(), cqrs.GetTraceRunOpt{
+				Filter: cqrs.GetTraceRunFilter{
+					TimeField: enums.TraceRunTimeStartedAt,
+					From:      time.Now().Add(-time.Hour),
+					Until:     time.Now().Add(time.Hour),
+					CEL:       expression,
+				},
+				Preview: true,
+			})
+			require.ErrorIs(t, err, cqrs.ErrInvalidRunExpression)
+		})
+	}
+}
+
 // Root-page results must derive end_time/status from EXTEND spans.
 func TestCQRSGetSpanRunsEnrichmentFromExtendSpans(t *testing.T) {
 	ctx := context.Background()
@@ -2665,8 +2706,9 @@ func TestCQRSGetRunsUsesModernSpanData(t *testing.T) {
 	deferred := true
 
 	attrs, err := json.Marshal(map[string]any{
-		meta.Attrs.BatchID.Key():      batchID.String(),
-		meta.Attrs.CronSchedule.Key(): "*/5 * * * *",
+		meta.Attrs.BatchID.Key():           batchID.String(),
+		meta.Attrs.CronSchedule.Key():      "*/5 * * * *",
+		meta.Attrs.DeferParentFnSlug.Key(): "parent-function",
 	})
 	require.NoError(t, err)
 	eventIDs, err := json.Marshal([]string{firstEventID.String(), eventID.String(), thirdEventID.String()})
@@ -2754,8 +2796,137 @@ func TestCQRSGetRunsUsesModernSpanData(t *testing.T) {
 	assert.Equal(t, batchID, *runs[0].BatchID)
 	require.NotNil(t, runs[0].CronSchedule)
 	assert.Equal(t, "*/5 * * * *", *runs[0].CronSchedule)
+	assert.Equal(t, "parent-function", runs[0].DeferParentFunctionSlug)
 	assert.JSONEq(t, `{"data":{"source":"function"}}`, string(runs[0].Output))
 	assert.NotEmpty(t, runs[0].Cursor)
+}
+
+func TestCQRSGetRunsIncludesSkippedOnlyWhenRequested(t *testing.T) {
+	cm, cleanup := initCQRS(t)
+	defer cleanup()
+
+	accountID := uuid.New()
+	workspaceID := uuid.New()
+	appID := uuid.New()
+	functionID := uuid.New()
+	queuedAt := time.Now().UTC().Truncate(time.Second).Add(123 * time.Nanosecond)
+	wantReasons := map[string]enums.SkipReason{}
+	for _, reason := range []enums.SkipReason{enums.SkipReasonFunctionPaused, enums.SkipReasonSingleton} {
+		runID := ulid.Make().String()
+		wantReasons[runID] = reason
+		attrs, err := json.Marshal(map[string]any{meta.Attrs.SkipReason.Key(): reason.String()})
+		require.NoError(t, err)
+		insertTestSpan(t, cm, testSpanFields{
+			RunID: runID, DynamicSpanID: runID, Name: meta.SpanNameRun,
+			Status: enums.StepStatusSkipped.String(), StartTime: queuedAt,
+			AccountID: accountID.String(), EnvID: workspaceID.String(),
+			AppID: appID.String(), FunctionID: functionID.String(), Attributes: attrs,
+		})
+	}
+	completedID := ulid.Make().String()
+	insertTestSpan(t, cm, testSpanFields{
+		RunID: completedID, DynamicSpanID: completedID, Name: meta.SpanNameRun,
+		Status: enums.StepStatusCompleted.String(), StartTime: queuedAt,
+		AccountID: accountID.String(), EnvID: workspaceID.String(),
+		AppID: appID.String(), FunctionID: functionID.String(),
+	})
+
+	// Queued time exercises root pagination and enrichment; ended time exercises aggregation.
+	for _, test := range []struct {
+		timeField enums.TraceRunTime
+		direction enums.TraceRunOrder
+	}{
+		{enums.TraceRunTimeQueuedAt, enums.TraceRunOrderAsc},
+		{enums.TraceRunTimeQueuedAt, enums.TraceRunOrderDesc},
+		{enums.TraceRunTimeEndedAt, enums.TraceRunOrderAsc},
+		{enums.TraceRunTimeEndedAt, enums.TraceRunOrderDesc},
+	} {
+		t.Run(test.timeField.String()+"/"+test.direction.String(), func(t *testing.T) {
+			boundary := queuedAt
+			if test.timeField == enums.TraceRunTimeEndedAt {
+				boundary = queuedAt.Add(100 * time.Millisecond)
+			}
+			opts := cqrs.GetTraceRunOpt{
+				Filter: cqrs.GetTraceRunFilter{
+					AccountID: accountID, WorkspaceID: workspaceID,
+					FunctionID: []uuid.UUID{functionID}, TimeField: test.timeField,
+					From: boundary, Until: boundary,
+				},
+				Order: []cqrs.GetTraceRunOrder{{Field: test.timeField, Direction: test.direction}},
+				Items: 10,
+			}
+			runs, err := cm.GetRuns(t.Context(), opts)
+			require.NoError(t, err)
+			require.Len(t, runs, 1)
+			require.Equal(t, completedID, runs[0].RunID)
+			require.Nil(t, runs[0].SkipReason)
+
+			opts.Filter.Status = []enums.RunStatus{enums.RunStatusSkipped}
+			runs, err = cm.GetRuns(t.Context(), opts)
+			require.NoError(t, err)
+			require.Empty(t, runs)
+
+			opts.IncludeSkipped = true
+			opts.Items = 1
+			gotReasons := map[string]enums.SkipReason{}
+			for range 3 {
+				runs, err = cm.GetRuns(t.Context(), opts)
+				require.NoError(t, err)
+				if len(runs) == 0 {
+					break
+				}
+				require.Len(t, runs, 1)
+				run := runs[0]
+				require.NotContains(t, gotReasons, run.RunID, "pagination must not repeat a run")
+				require.Equal(t, enums.RunStatusSkipped, run.Status)
+				require.NotNil(t, run.SkipReason)
+				gotReasons[run.RunID] = *run.SkipReason
+				require.NotEmpty(t, run.Cursor)
+				opts.Cursor = run.Cursor
+			}
+			require.Equal(t, wantReasons, gotReasons)
+			require.Empty(t, runs, "pagination must terminate")
+		})
+	}
+}
+
+func TestCQRSGetRunsAcceptsLegacyMicrosecondCursor(t *testing.T) {
+	cm, cleanup := initCQRS(t)
+	defer cleanup()
+	accountID, workspaceID, appID, functionID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	queuedAt := time.Now().UTC().Truncate(time.Microsecond)
+	firstID, secondID := "01J00000000000000000000001", "01J00000000000000000000002"
+	for _, runID := range []string{firstID, secondID} {
+		insertTestSpan(t, cm, testSpanFields{
+			RunID: runID, DynamicSpanID: runID, Name: meta.SpanNameRun,
+			Status: enums.StepStatusCompleted.String(), StartTime: queuedAt,
+			AccountID: accountID.String(), EnvID: workspaceID.String(),
+			AppID: appID.String(), FunctionID: functionID.String(),
+		})
+	}
+	for _, timeField := range []enums.TraceRunTime{enums.TraceRunTimeQueuedAt, enums.TraceRunTimeEndedAt} {
+		for _, direction := range []enums.TraceRunOrder{enums.TraceRunOrderAsc, enums.TraceRunOrderDesc} {
+			t.Run(timeField.String()+"/"+direction.String(), func(t *testing.T) {
+				boundary, column := queuedAt, "start_time"
+				if timeField == enums.TraceRunTimeEndedAt {
+					boundary, column = queuedAt.Add(100*time.Millisecond), "end_time"
+				}
+				cursorJSON := fmt.Sprintf(`{"id":%q,"c":{%q:{"f":%q,"v":%d}}}`, firstID, column, column, boundary.UnixMicro())
+				runs, err := cm.GetRuns(t.Context(), cqrs.GetTraceRunOpt{
+					Filter: cqrs.GetTraceRunFilter{
+						AccountID: accountID, WorkspaceID: workspaceID,
+						FunctionID: []uuid.UUID{functionID}, TimeField: timeField,
+						From: boundary, Until: boundary,
+					},
+					Order: []cqrs.GetTraceRunOrder{{Field: timeField, Direction: direction}},
+					Items: 1, Cursor: base64.StdEncoding.EncodeToString([]byte(cursorJSON)),
+				})
+				require.NoError(t, err)
+				require.Len(t, runs, 1)
+				require.Equal(t, secondID, runs[0].RunID)
+			})
+		}
+	}
 }
 
 func TestCQRSGetRunsMapsScheduledStatusFilter(t *testing.T) {
@@ -2848,6 +3019,10 @@ func TestCQRSGetRunsIncludesFinalEndedAtUntilBoundary(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	insideRunID := ulid.Make()
 	outsideRunID := ulid.Make()
+	attrs, err := json.Marshal(map[string]any{
+		meta.Attrs.DeferParentFnSlug.Key(): "parent-function",
+	})
+	require.NoError(t, err)
 
 	insertLifecycle := func(runID ulid.ULID, dynamicID string, finalAt time.Time) {
 		traceID := "trace-" + runID.String()
@@ -2855,6 +3030,7 @@ func TestCQRSGetRunsIncludesFinalEndedAtUntilBoundary(t *testing.T) {
 			RunID: runID.String(), TraceID: traceID, DynamicSpanID: dynamicID, Name: meta.SpanNameRun,
 			Status: enums.StepStatusQueued.String(), StartTime: baseTime.Add(-time.Second),
 			AccountID: accountID.String(), AppID: appID.String(), FunctionID: functionID.String(), EnvID: workspaceID.String(),
+			Attributes: attrs,
 		})
 		insertTestSpan(t, cm, testSpanFields{
 			RunID: runID.String(), TraceID: traceID, DynamicSpanID: dynamicID, Name: meta.SpanNameDynamicExtension,
@@ -2883,6 +3059,7 @@ func TestCQRSGetRunsIncludesFinalEndedAtUntilBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, runs, 1)
 	assert.Equal(t, insideRunID.String(), runs[0].RunID)
+	assert.Equal(t, "parent-function", runs[0].DeferParentFunctionSlug)
 }
 
 //
@@ -2907,71 +3084,6 @@ func TestCQRSGetSpan(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, "dyn-root", result.SpanID)
 		assert.Len(t, result.Children, 1, "Root should have 1 child")
-	})
-
-	t.Run("by debug run ID", func(t *testing.T) {
-		cm, cleanup := initCQRS(t)
-		defer cleanup()
-
-		runID := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		debugRunID := ulid.MustNew(ulid.Now(), rand.Reader)
-
-		insertTestSpan(t, cm, testSpanFields{RunID: runID, DynamicSpanID: "dyn-root", DebugRunID: debugRunID.String()})
-		insertTestSpan(t, cm, testSpanFields{RunID: runID, DynamicSpanID: "dyn-child", ParentSpanID: "dyn-root", DebugRunID: debugRunID.String()})
-
-		result, err := cm.GetSpansByDebugRunID(t.Context(), debugRunID)
-		require.NoError(t, err)
-		require.Len(t, result, 1, "Should return 1 root span for the single run")
-		assert.Len(t, result[0].Children, 1, "Root should have 1 child")
-	})
-
-	t.Run("by debug session ID", func(t *testing.T) {
-		cm, cleanup := initCQRS(t)
-		defer cleanup()
-
-		runID := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		debugRunID := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		debugSessionID := ulid.MustNew(ulid.Now(), rand.Reader)
-
-		insertTestSpan(t, cm, testSpanFields{RunID: runID, DynamicSpanID: "dyn-root", DebugRunID: debugRunID, DebugSessionID: debugSessionID.String()})
-		insertTestSpan(t, cm, testSpanFields{RunID: runID, DynamicSpanID: "dyn-child", ParentSpanID: "dyn-root", DebugRunID: debugRunID, DebugSessionID: debugSessionID.String()})
-
-		result, err := cm.GetSpansByDebugSessionID(t.Context(), debugSessionID)
-		require.NoError(t, err)
-		require.Len(t, result, 1, "Should return 1 debug run group")
-		require.Len(t, result[0], 1, "Debug run group should have 1 root span")
-		assert.Len(t, result[0][0].Children, 1, "Root should have 1 child")
-	})
-
-	t.Run("by debug session ID keeps runs separate when dynamic span IDs collide", func(t *testing.T) {
-		cm, cleanup := initCQRS(t)
-		defer cleanup()
-
-		debugSessionID := ulid.MustNew(ulid.Now(), rand.Reader)
-
-		runIDOne := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		runIDTwo := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		debugRunIDOne := ulid.MustNew(ulid.Now(), rand.Reader).String()
-		debugRunIDTwo := ulid.MustNew(ulid.Now(), rand.Reader).String()
-
-		insertTestSpan(t, cm, testSpanFields{
-			RunID:          runIDOne,
-			DynamicSpanID:  "dyn-root",
-			DebugRunID:     debugRunIDOne,
-			DebugSessionID: debugSessionID.String(),
-		})
-		insertTestSpan(t, cm, testSpanFields{
-			RunID:          runIDTwo,
-			DynamicSpanID:  "dyn-root",
-			DebugRunID:     debugRunIDTwo,
-			DebugSessionID: debugSessionID.String(),
-		})
-
-		result, err := cm.GetSpansByDebugSessionID(t.Context(), debugSessionID)
-		require.NoError(t, err)
-		require.Len(t, result, 2, "separate runs in the same debug session must not collapse into one group")
-		require.Len(t, result[0], 1)
-		require.Len(t, result[1], 1)
 	})
 }
 
@@ -3606,5 +3718,125 @@ func TestCQRSGetSpanReparentsUserland(t *testing.T) {
 					"span %q should be parented under %q", e.span, e.parent)
 			}
 		})
+	}
+}
+
+// dynamic_span_id is deterministic per step position, so it collides across
+// runs; a query scoped to one run must not surface another run's groups.
+func TestCQRSGetSpansByRunIDsAndNameNoCrossRunBleed(t *testing.T) {
+	cm, cleanup := initCQRS(t)
+	defer cleanup()
+
+	runA := ulid.MustNew(ulid.Now(), rand.Reader)
+	runB := ulid.MustNew(ulid.Now(), rand.Reader)
+	const dynamicSpanID = "step-x"
+	sharedTraceID := ulid.MustNew(ulid.Now(), rand.Reader).String()
+
+	insertTestSpan(t, cm, testSpanFields{
+		RunID:         runA.String(),
+		TraceID:       sharedTraceID,
+		DynamicSpanID: dynamicSpanID,
+		Name:          meta.SpanNameRun,
+		Attributes:    []byte(`{"_inngest.dynamic.status":"Running"}`),
+	})
+	// UpdateSpan follow-up: shares run A's run_id and dynamic_span_id, not its name.
+	insertTestSpan(t, cm, testSpanFields{
+		RunID:         runA.String(),
+		TraceID:       sharedTraceID,
+		DynamicSpanID: dynamicSpanID,
+		Name:          meta.SpanNameDynamicExtension,
+		Attributes:    []byte(`{"_inngest.dynamic.status":"Completed"}`),
+	})
+	// Colliding dynamic_span_id from an unrelated run.
+	insertTestSpan(t, cm, testSpanFields{
+		RunID:         runB.String(),
+		DynamicSpanID: dynamicSpanID,
+		Name:          meta.SpanNameRun,
+		Attributes:    []byte(`{"_inngest.dynamic.status":"Running"}`),
+	})
+
+	spansByRun, err := cm.(wrapper).GetSpansByRunIDsAndName(t.Context(), []ulid.ULID{runA}, meta.SpanNameRun)
+	require.NoError(t, err)
+
+	require.Len(t, spansByRun, 1, "only run A should be present in the result")
+	require.NotContains(t, spansByRun, runB, "run B must not bleed into a query scoped to run A")
+
+	groupA := spansByRun[runA]
+	require.Len(t, groupA, 1, "run A's single dynamic_span_id should collapse into one merged span")
+	assert.Equal(t, enums.StepStatusCompleted, groupA[0].Status, "the EXTEND follow-up's status must be merged onto the named row")
+}
+
+// TestRollupSpanMetadataFromFragmentsLegacyMergeThenSet covers a run that
+// straddles the deploy where every write became a set: older merge fragments
+// for a (span, kind) followed by a set fold to the set value.
+func TestRollupSpanMetadataFromFragmentsLegacyMergeThenSet(t *testing.T) {
+	fragment := func(op enums.MetadataOpcode, values string) map[string]any {
+		attrs, err := json.Marshal(map[string]any{
+			"_inngest.metadata.scope":  enums.MetadataScopeRun,
+			"_inngest.metadata.kind":   "userland.thing",
+			"_inngest.metadata.op":     op,
+			"_inngest.metadata.values": values,
+		})
+		require.NoError(t, err)
+		return map[string]any{"attributes": string(attrs)}
+	}
+
+	md, err := rollupSpanMetadataFromFragments(context.Background(), []map[string]any{
+		fragment(enums.MetadataOpcodeMerge, `{"a":1,"b":2}`),
+		fragment(enums.MetadataOpcodeMerge, `{"b":3}`),
+		fragment(enums.MetadataOpcodeSet, `{"c":4}`),
+	}, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, metadata.Kind("userland.thing"), md.Kind)
+	require.Equal(t, metadata.Values{"c": json.RawMessage(`4`)}, md.Values)
+
+	// The latest of several sets wins.
+	md, err = rollupSpanMetadataFromFragments(context.Background(), []map[string]any{
+		fragment(enums.MetadataOpcodeMerge, `{"a":1}`),
+		fragment(enums.MetadataOpcodeSet, `{"c":4}`),
+		fragment(enums.MetadataOpcodeSet, `{"d":5}`),
+	}, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, metadata.Values{"d": json.RawMessage(`5`)}, md.Values)
+}
+
+func TestSpanRunCursorTimeIgnoresOutOfRangeNanoseconds(t *testing.T) {
+	base := time.UnixMicro(1_700_000_000_000_000).UTC()
+	for _, tc := range []struct {
+		ns   int64
+		want time.Time
+	}{
+		{0, base},
+		{999, base.Add(999)},
+		{-1, base},
+		{1000, base},
+		{1 << 40, base},
+	} {
+		got := spanRunCursorTime(&cqrs.TraceCursor{Value: base.UnixMicro(), NanosecondRemainder: tc.ns})
+		require.Equal(t, tc.want, got, "ns=%d", tc.ns)
+	}
+}
+
+// TestRollupSpanMetadataFromFragmentsSetsIsUser checks IsUser follows the
+// fragments' kind prefix, so it agrees with DuckDB's stored is_user.
+func TestRollupSpanMetadataFromFragmentsSetsIsUser(t *testing.T) {
+	for kind, isUser := range map[string]bool{
+		"userland.score": true,
+		"inngest.score":  false,
+	} {
+		attrs, err := json.Marshal(map[string]any{
+			"_inngest.metadata.scope":  enums.MetadataScopeRun,
+			"_inngest.metadata.kind":   kind,
+			"_inngest.metadata.op":     enums.MetadataOpcodeSet,
+			"_inngest.metadata.values": `{"v":1}`,
+		})
+		require.NoError(t, err)
+
+		md, err := rollupSpanMetadataFromFragments(context.Background(), []map[string]any{
+			{"attributes": string(attrs)},
+		}, time.Now())
+		require.NoError(t, err)
+		require.Equal(t, metadata.Kind(kind), md.Kind)
+		require.Equal(t, isUser, md.IsUser, kind)
 	}
 }

@@ -2,8 +2,6 @@ module github.com/inngest/inngest
 
 go 1.26.4
 
-replace github.com/tencentcloud/tencentcloud-sdk-go v3.0.82+incompatible => github.com/tencentcloud/tencentcloud-sdk-go v1.0.191
-
 require (
 	connectrpc.com/connect v1.16.1
 	cuelang.org/go v0.4.2
@@ -32,6 +30,7 @@ require (
 	github.com/getsentry/sentry-go v0.27.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/cors v1.2.1
+	github.com/gofrs/flock v0.12.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/cel-go v0.27.0
 	github.com/google/uuid v1.6.0
@@ -41,8 +40,8 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/inngest/expr v0.0.0-20260516032105-f2cf85864a0e
-	github.com/inngest/go-httpstat v0.0.0-20250328150054-dfda91359d48
-	github.com/inngest/inngestgo v0.15.2-0.20260522205623-83a02d80db93
+	github.com/inngest/go-httpstat v0.0.0-20261019161010-8683e00144e3
+	github.com/inngest/inngestgo v0.16.5
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jinzhu/copier v0.3.5
 	github.com/jonboulle/clockwork v0.5.0
@@ -82,6 +81,7 @@ require (
 	github.com/valyala/fastjson v1.6.4
 	github.com/vektah/gqlparser/v2 v2.5.15
 	github.com/xhit/go-str2duration/v2 v2.1.0
+	github.com/zalando/go-keyring v0.2.8
 	go.opentelemetry.io/collector/pdata v1.36.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
@@ -103,11 +103,12 @@ require (
 	gocloud.dev v0.40.0
 	gocloud.dev/pubsub/natspubsub v0.25.0
 	golang.org/x/mod v0.36.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.21.0
 	gonum.org/v1/gonum v0.17.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9
-	google.golang.org/grpc v1.80.0
+	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	lukechampine.com/frand v1.5.1
 	modernc.org/sqlite v1.46.1
@@ -162,6 +163,7 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -175,6 +177,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.2.5 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -280,7 +283,6 @@ require (
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
@@ -297,3 +299,5 @@ require (
 )
 
 tool github.com/Songmu/gotesplit/cmd/gotesplit
+
+replace github.com/grpc-ecosystem/grpc-gateway/v2 => github.com/inngest/grpc-gateway/v2 v2.0.0-20260911163156-0bd4dcb02324

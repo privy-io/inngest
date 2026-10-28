@@ -158,8 +158,10 @@ func TestGetQueueItemByRunIDResolvesShardFromScope(t *testing.T) {
 	require.NoError(t, err)
 
 	d := &debugAPI{
-		queueReader: q,
-		shards:      shardRegistry,
+		runReader:  q,
+		itemReader: q,
+		partReader: q,
+		shards:     shardRegistry,
 	}
 
 	resp, err := d.GetQueueItem(ctx, &pb.QueueItemRequest{
@@ -301,7 +303,7 @@ func TestGetDebounceInfoHandler(t *testing.T) {
 		Debounce: &inngest.Debounce{
 			Key:     nil,
 			Period:  "10s",
-			Timeout: util.StrPtr("60s"),
+			Timeout: new("60s"),
 		},
 	}
 
@@ -959,7 +961,7 @@ func TestDeleteDebounceHandler(t *testing.T) {
 		Debounce: &inngest.Debounce{
 			Key:     nil,
 			Period:  "10s",
-			Timeout: util.StrPtr("60s"),
+			Timeout: new("60s"),
 		},
 	}
 
@@ -1025,7 +1027,7 @@ func TestRunDebounceHandler(t *testing.T) {
 		Debounce: &inngest.Debounce{
 			Key:     nil,
 			Period:  "10s",
-			Timeout: util.StrPtr("60s"),
+			Timeout: new("60s"),
 		},
 	}
 
@@ -1079,7 +1081,7 @@ func TestDeleteDebounceByIDHandler(t *testing.T) {
 		Debounce: &inngest.Debounce{
 			Key:     nil,
 			Period:  "10s",
-			Timeout: util.StrPtr("60s"),
+			Timeout: new("60s"),
 		},
 	}
 

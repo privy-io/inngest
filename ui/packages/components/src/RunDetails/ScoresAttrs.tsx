@@ -1,8 +1,10 @@
 import { TimeElement } from '../DetailsCard/Element';
-import { KindInngestScore } from '../generated';
+import { canonicalMetadataKind } from '../RunDetailsShared/metadataKind';
+import { KindInngestScore, KindPrefixInngestScore } from '../generated';
 
 type ScoreMetadata = {
   kind: string;
+  isUser?: boolean | null;
   updatedAt: string;
   // Loose structural supertype of every SpanMetadata arm so both the V3 and V4
   // Trace types can be passed in. `object` (not Record<string, unknown>) is
@@ -23,9 +25,33 @@ type ScoreTrace = {
   childrenSpans?: ScoreTrace[];
 };
 
+// Scores come in two kind shapes:
+// - `inngest.score.<name>` w/ `{value}` (pre #4482, and per name kinds going
+//   forward)
+// - `inngest.score` w/ `{"<name>": {value}}` (the legacy shared kind)
+export function isScoreKind(kind: string): boolean {
+  return (
+    kind === KindInngestScore ||
+    (kind.startsWith(KindPrefixInngestScore) && kind.length > KindPrefixInngestScore.length)
+  );
+}
+
+// Normalizes either score kind shape to (name, raw value) pairs so readers
+// don't care which one was written.
+function scoreEntries(md: ScoreMetadata): [string, unknown][] {
+  const kind = canonicalMetadataKind(md);
+  if (kind === KindInngestScore) {
+    return Object.entries(md.values);
+  }
+  if (isScoreKind(kind)) {
+    return [[kind.slice(KindPrefixInngestScore.length), md.values]];
+  }
+  return [];
+}
+
 export function collectScoreMetadata(trace?: ScoreTrace): ScoreMetadata[] {
   // Run views need child spans because scores attach where they are emitted.
-  const metadata = trace?.metadata?.filter((md) => md.kind === KindInngestScore) ?? [];
+  const metadata = trace?.metadata?.filter((md) => isScoreKind(canonicalMetadataKind(md))) ?? [];
   const childMetadata = trace?.childrenSpans?.flatMap((child) => collectScoreMetadata(child)) ?? [];
 
   return [...metadata, ...childMetadata];
@@ -33,25 +59,37 @@ export function collectScoreMetadata(trace?: ScoreTrace): ScoreMetadata[] {
 
 // Trim floating-point noise and excess precision from non-integer scores;
 // integers and booleans render as-is.
-function formatScoreValue(value: number | boolean): string {
+export function formatScoreValue(value: number | boolean): string {
   if (typeof value === 'number' && !Number.isInteger(value)) {
     return String(Number(value.toPrecision(4)));
   }
   return String(value);
 }
 
+function isScoreValue(raw: unknown): raw is { value: number | boolean } {
+  if (typeof raw !== 'object' || raw === null || !('value' in raw)) {
+    return false;
+  }
+  const { value } = raw;
+  return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+}
+
 export function scoreRows(metadata: ScoreMetadata[]): ScoreRow[] {
-  return metadata
-    .flatMap((md) =>
-      Object.entries(md.values).flatMap(([name, raw]) => {
-        const value = (raw as { value?: unknown } | null)?.value;
-        if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
-          return [{ name, value, updatedAt: md.updatedAt }];
-        }
-        return [];
-      })
-    )
-    .sort((a, b) => a.name.localeCompare(b.name) || a.updatedAt.localeCompare(b.updatedAt));
+  const latest = new Map<string, ScoreRow>();
+
+  for (const md of metadata) {
+    for (const [name, raw] of scoreEntries(md)) {
+      if (!isScoreValue(raw)) {
+        continue;
+      }
+      const prev = latest.get(name);
+      if (!prev || md.updatedAt >= prev.updatedAt) {
+        latest.set(name, { name, value: raw.value, updatedAt: md.updatedAt });
+      }
+    }
+  }
+
+  return [...latest.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export const ScoresAttrs = ({ metadata }: { metadata: ScoreMetadata[] }) => {
@@ -72,9 +110,9 @@ export const ScoresAttrs = ({ metadata }: { metadata: ScoreMetadata[] }) => {
         <div>Value</div>
         <div>Updated at</div>
       </div>
-      {rows.map((row, index) => (
+      {rows.map((row) => (
         <div
-          key={`score-${row.name}-${row.updatedAt}-${index}`}
+          key={row.name}
           className="border-muted grid grid-cols-[minmax(10rem,1fr)_8rem_12rem] gap-4 border-b px-4 py-3 text-sm last:border-b-0"
         >
           <div className="text-basis min-w-0 font-medium [overflow-wrap:anywhere]">{row.name}</div>

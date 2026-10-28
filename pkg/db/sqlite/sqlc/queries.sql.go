@@ -1152,6 +1152,56 @@ func (q *Queries) GetFunctionsByApp(ctx context.Context, arg GetFunctionsByAppPa
 	return items, nil
 }
 
+const getFunctionsBySlugs = `-- name: GetFunctionsBySlugs :many
+SELECT functions.id, functions.app_id, functions.name, functions.slug, functions.config, functions.created_at, functions.archived_at
+FROM functions
+JOIN apps ON apps.id = functions.app_id
+WHERE functions.slug IN (/*SLICE:slugs*/?)
+AND functions.archived_at IS NULL
+AND apps.archived_at IS NULL
+`
+
+func (q *Queries) GetFunctionsBySlugs(ctx context.Context, slugs []string) ([]*Function, error) {
+	query := getFunctionsBySlugs
+	var queryParams []interface{}
+	if len(slugs) > 0 {
+		for _, v := range slugs {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:slugs*/?", strings.Repeat(",?", len(slugs))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:slugs*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Function
+	for rows.Next() {
+		var i Function
+		if err := rows.Scan(
+			&i.ID,
+			&i.AppID,
+			&i.Name,
+			&i.Slug,
+			&i.Config,
+			&i.CreatedAt,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getHistoryItem = `-- name: GetHistoryItem :one
 SELECT id, created_at, run_started_at, function_id, function_version, run_id, event_id, batch_id, group_id, idempotency_key, type, attempt, latency_ms, step_name, step_id, url, cancel_request, sleep, wait_for_event, wait_result, invoke_function, invoke_function_result, result, step_type FROM history WHERE id = ?
 `
@@ -1487,142 +1537,6 @@ func (q *Queries) GetSpanOutput(ctx context.Context, arg GetSpanOutputParams) ([
 	return items, nil
 }
 
-const getSpansByDebugRunID = `-- name: GetSpansByDebugRunID :many
-SELECT
-  trace_id,
-  run_id,
-  debug_session_id,
-  dynamic_span_id,
-  MIN(start_time) as start_time,
-  MAX(end_time) AS end_time,
-  parent_span_id,
-  json_group_array(json_object(
-    'span_id', span_id,
-    'start_time', start_time,
-    'end_time', end_time,
-    'name', name,
-    'attributes', attributes,
-    'links', links,
-    'output_span_id', CASE WHEN output IS NOT NULL THEN span_id ELSE NULL END,
-    'input_span_id', CASE WHEN input IS NOT NULL THEN span_id ELSE NULL END
-  )) AS span_fragments
-FROM spans
-WHERE debug_run_id = ?
-GROUP BY trace_id, run_id, debug_session_id, dynamic_span_id, parent_span_id
-ORDER BY start_time
-`
-
-type GetSpansByDebugRunIDRow struct {
-	TraceID        string
-	RunID          string
-	DebugSessionID sql.NullString
-	DynamicSpanID  sql.NullString
-	StartTime      interface{}
-	EndTime        interface{}
-	ParentSpanID   sql.NullString
-	SpanFragments  interface{}
-}
-
-func (q *Queries) GetSpansByDebugRunID(ctx context.Context, debugRunID sql.NullString) ([]*GetSpansByDebugRunIDRow, error) {
-	rows, err := q.db.QueryContext(ctx, getSpansByDebugRunID, debugRunID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*GetSpansByDebugRunIDRow
-	for rows.Next() {
-		var i GetSpansByDebugRunIDRow
-		if err := rows.Scan(
-			&i.TraceID,
-			&i.RunID,
-			&i.DebugSessionID,
-			&i.DynamicSpanID,
-			&i.StartTime,
-			&i.EndTime,
-			&i.ParentSpanID,
-			&i.SpanFragments,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getSpansByDebugSessionID = `-- name: GetSpansByDebugSessionID :many
-SELECT
-  trace_id,
-  run_id,
-  debug_run_id,
-  dynamic_span_id,
-  MIN(start_time) as start_time,
-  MAX(end_time) AS end_time,
-  parent_span_id,
-  json_group_array(json_object(
-    'span_id', span_id,
-    'start_time', start_time,
-    'end_time', end_time,
-    'name', name,
-    'attributes', attributes,
-    'links', links,
-    'output_span_id', CASE WHEN output IS NOT NULL THEN span_id ELSE NULL END,
-    'input_span_id', CASE WHEN input IS NOT NULL THEN span_id ELSE NULL END
-  )) AS span_fragments
-FROM spans
-WHERE debug_session_id = ?
-GROUP BY trace_id, run_id, debug_run_id, dynamic_span_id, parent_span_id
-ORDER BY start_time
-`
-
-type GetSpansByDebugSessionIDRow struct {
-	TraceID       string
-	RunID         string
-	DebugRunID    sql.NullString
-	DynamicSpanID sql.NullString
-	StartTime     interface{}
-	EndTime       interface{}
-	ParentSpanID  sql.NullString
-	SpanFragments interface{}
-}
-
-func (q *Queries) GetSpansByDebugSessionID(ctx context.Context, debugSessionID sql.NullString) ([]*GetSpansByDebugSessionIDRow, error) {
-	rows, err := q.db.QueryContext(ctx, getSpansByDebugSessionID, debugSessionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*GetSpansByDebugSessionIDRow
-	for rows.Next() {
-		var i GetSpansByDebugSessionIDRow
-		if err := rows.Scan(
-			&i.TraceID,
-			&i.RunID,
-			&i.DebugRunID,
-			&i.DynamicSpanID,
-			&i.StartTime,
-			&i.EndTime,
-			&i.ParentSpanID,
-			&i.SpanFragments,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getSpansByRunID = `-- name: GetSpansByRunID :many
 SELECT
   run_id,
@@ -1707,7 +1621,7 @@ SELECT
     'input_span_id', CASE WHEN s.input IS NOT NULL THEN s.span_id ELSE NULL END
   )) AS span_fragments
 FROM spans AS s
-JOIN spans AS m ON m.dynamic_span_id = s.dynamic_span_id
+JOIN spans AS m ON m.dynamic_span_id = s.dynamic_span_id AND m.run_id = s.run_id
 WHERE m.name = ?
   AND m.run_id IN (/*SLICE:run_ids*/?)
 GROUP BY s.run_id, s.trace_id, s.dynamic_span_id, s.parent_span_id
@@ -2747,16 +2661,26 @@ INSERT INTO apps (id, name, sdk_language, sdk_version, framework, metadata, stat
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = CASE WHEN excluded.name = '' THEN apps.name ELSE excluded.name END,
-    sdk_language = excluded.sdk_language,
-    sdk_version = excluded.sdk_version,
-    framework = excluded.framework,
-    metadata = excluded.metadata,
-    status = excluded.status,
-    error = excluded.error,
-    checksum = excluded.checksum,
+    -- Placeholder (name='') hitting an active named row must not blank the
+    -- registration. The checksum short-circuit then returns without writing
+    -- these columns back. An archived row takes the incoming values; error
+    -- and checksum below also drop so revival cannot short-circuit.
+    sdk_language = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.sdk_language ELSE excluded.sdk_language END,
+    sdk_version  = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.sdk_version ELSE excluded.sdk_version END,
+    framework    = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.framework ELSE excluded.framework END,
+    metadata     = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.metadata ELSE excluded.metadata END,
+    status       = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.status ELSE excluded.status END,
+    error = CASE
+      WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.error
+      ELSE excluded.error
+    END,
+    checksum = CASE
+      WHEN excluded.checksum = '' AND apps.archived_at IS NULL THEN apps.checksum
+      ELSE excluded.checksum
+    END,
     archived_at = NULL,
-    "method" = excluded.method,
-    app_version = excluded.app_version,
+    "method" = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.method ELSE excluded.method END,
+    app_version = CASE WHEN excluded.name = '' AND apps.name <> '' AND apps.archived_at IS NULL THEN apps.app_version ELSE excluded.app_version END,
     url = excluded.url
 RETURNING id, name, sdk_language, sdk_version, framework, metadata, status, error, checksum, created_at, archived_at, url, method, app_version
 `

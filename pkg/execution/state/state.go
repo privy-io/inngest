@@ -85,6 +85,9 @@ const (
 	InngestErrStateOverflowed = "InngestErrStateOverflowed"
 	// InngestErrTimeoutTooLong is the public error code for ErrTimeoutTooLong
 	InngestErrTimeoutTooLong = "InngestErrTimeoutTooLong"
+	// InngestErrInternal is the public error code for runs that can't
+	// continue because of a system error.
+	InngestErrInternal = "InngestErrInternal"
 )
 
 // Identifier represents the unique identifier for a workflow run.
@@ -487,4 +490,7 @@ type Input struct {
 	// RequestVersion represents the executor request versioning/hashing style
 	// used to manage state.
 	RequestVersion *int
+
+	// ScheduledAt is the time the run was due to start.
+	ScheduledAt time.Time
 }

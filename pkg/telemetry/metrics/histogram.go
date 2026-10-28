@@ -15,6 +15,12 @@ var (
 		600_000, 1_800_000, // < 1h
 	}
 
+	fastPathExecutionLatencyBoundaries = []float64{
+		1, 2, 5, 10, 20, 50, 100, 200, 500,
+		1000, 2000, 5000, 10_000, 15_000, 20_000, 30_000,
+		60_000, 300_000, 600_000,
+	}
+
 	cancellationReadDurationBoundaries = []float64{
 		5, 10, 50, 100, 200, 500, // < 1s
 		1000, 2000, 5000, 30_000, // < 1m
@@ -30,6 +36,12 @@ var (
 	}
 
 	peekSizeBoundaries = []float64{10, 30, 50, 100, 250, 500, 1000, 3000, 5000}
+
+	// insightsQueryRowCountBoundaries spans 0 up through
+	// pkg/duckdb/insights' hard row-count ceiling (defaultInsightsLimit,
+	// 1000) rather than the generic DefaultBoundaries set, since a value
+	// past that ceiling can never actually occur.
+	insightsQueryRowCountBoundaries = []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000}
 
 	cancellationReadSizeBoundaries = []float64{10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 25_000, 50_000, 75_000, 100_000}
 
@@ -116,6 +128,17 @@ func HistogramQueueItemLatency(ctx context.Context, value int64, opts HistogramO
 		Tags:        opts.Tags,
 		Unit:        "ms",
 		Boundaries:  QueueItemLatencyBoundaries,
+	})
+}
+
+func HistogramFastPathExecutionLatency(ctx context.Context, value int64, opts HistogramOpt) {
+	RecordIntHistogramMetric(ctx, value, HistogramOpt{
+		PkgName:     opts.PkgName,
+		MetricName:  "fast_path_execution_latency",
+		Description: "Time from queue enqueue to hinted work starting, including scheduled and capacity delays",
+		Tags:        opts.Tags,
+		Unit:        "ms",
+		Boundaries:  fastPathExecutionLatencyBoundaries,
 	})
 }
 
@@ -750,5 +773,32 @@ func HistogramMetadataGetParentSpanDuration(
 		Tags:        opts.Tags,
 		Unit:        "ms",
 		Boundaries:  []float64{10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120_000},
+	})
+}
+
+// HistogramInsightsQueryDuration records one duckdbInsightsQuery GQL call's
+// end-to-end duration (Transpile through Execute), tagged by outcome status
+// -- see IncrInsightsQueryCounter's doc comment for why this exists.
+func HistogramInsightsQueryDuration(ctx context.Context, dur time.Duration, opts HistogramOpt) {
+	RecordIntHistogramMetric(ctx, dur.Milliseconds(), HistogramOpt{
+		PkgName:     opts.PkgName,
+		MetricName:  "insights_query_duration",
+		Description: "Duration of an insights query, from transpile through execution, in ms",
+		Tags:        opts.Tags,
+		Unit:        "ms",
+		Boundaries:  DefaultBoundaries,
+	})
+}
+
+// HistogramInsightsQueryRowCount records how many rows a successful
+// duckdbInsightsQuery call returned.
+func HistogramInsightsQueryRowCount(ctx context.Context, count int64, opts HistogramOpt) {
+	RecordIntHistogramMetric(ctx, count, HistogramOpt{
+		PkgName:     opts.PkgName,
+		MetricName:  "insights_query_row_count",
+		Description: "Number of rows returned by a successful insights query",
+		Tags:        opts.Tags,
+		Unit:        "rows",
+		Boundaries:  insightsQueryRowCountBoundaries,
 	})
 }

@@ -1,11 +1,11 @@
 package queue
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,6 +31,26 @@ func TestPartitionBacklogSizeConcurrencyOption(t *testing.T) {
 
 		opts = NewQueueOptions(WithPartitionBacklogSizeConcurrency(-1))
 		require.Equal(t, defaultPartitionBacklogSizeConcurrency, opts.PartitionBacklogSizeConcurrency())
+	})
+}
+
+func TestSemaphoreRequeueExtensionOption(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		opts := NewQueueOptions()
+		require.Equal(t, PartitionSemaphoreLimitRequeueExtension, opts.SemaphoreRequeueExtension())
+	})
+
+	t.Run("custom", func(t *testing.T) {
+		opts := NewQueueOptions(WithSemaphoreRequeueExtension(2 * time.Second))
+		require.Equal(t, 2*time.Second, opts.SemaphoreRequeueExtension())
+	})
+
+	t.Run("non-positive falls back to default", func(t *testing.T) {
+		opts := NewQueueOptions(WithSemaphoreRequeueExtension(0))
+		require.Equal(t, PartitionSemaphoreLimitRequeueExtension, opts.SemaphoreRequeueExtension())
+
+		opts = NewQueueOptions(WithSemaphoreRequeueExtension(-time.Second))
+		require.Equal(t, PartitionSemaphoreLimitRequeueExtension, opts.SemaphoreRequeueExtension())
 	})
 }
 
@@ -99,17 +119,42 @@ func TestAsRetryAt(t *testing.T) {
 	require.Nil(t, AsRetryAtError(fmt.Errorf("no")))
 }
 
-func TestMigratePayloadScope(t *testing.T) {
-	payload := MigratePayload{
-		AccountID:  uuid.New(),
-		EnvID:      uuid.New(),
-		FunctionID: uuid.New(),
+func TestPartitionPeekLimit(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value int64
+		want  int64
+	}{
+		{name: "custom", value: 750, want: 750},
+		{name: "below minimum", value: 1, want: PartitionSelectionMax},
+		{name: "just below minimum", value: PartitionSelectionMax - 1, want: PartitionSelectionMax},
+		{name: "minimum", value: PartitionSelectionMax, want: PartitionSelectionMax},
+		{name: "cap", value: 2000, want: AbsolutePartitionPeekMax},
+		{name: "zero", value: 0, want: PartitionPeekMax},
+		{name: "negative", value: -1, want: PartitionPeekMax},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewQueueOptions(WithPartitionPeekMaxGetter(func(ctx context.Context, shard string) int64 {
+				require.Equal(t, "ss3", shard)
+				return tt.value
+			}))
+			require.Equal(t, tt.want, opts.PartitionPeekLimit(context.Background(), "ss3"))
+		})
 	}
-
-	require.Equal(t, Scope{
-		AccountID:  payload.AccountID,
-		EnvID:      payload.EnvID,
-		FunctionID: payload.FunctionID,
-	}, payload.Scope())
-	require.NoError(t, payload.Scope().Validate())
+	t.Run("nil getter uses default", func(t *testing.T) {
+		opts := NewQueueOptions(WithPartitionPeekMaxGetter(nil))
+		require.Equal(t, int64(PartitionPeekMax), opts.PartitionPeekLimit(context.Background(), "ss3"))
+	})
+	t.Run("default", func(t *testing.T) {
+		require.Equal(t, int64(PartitionPeekMax), NewQueueOptions().PartitionPeekLimit(context.Background(), "ss3"))
+	})
+	t.Run("runtime updates and shard targeting", func(t *testing.T) {
+		limits := map[string]int64{"ss3": 750, "ss6": 500}
+		opts := NewQueueOptions(WithPartitionPeekMaxGetter(func(_ context.Context, shard string) int64 { return limits[shard] }))
+		require.Equal(t, int64(750), opts.PartitionPeekLimit(context.Background(), "ss3"))
+		require.Equal(t, int64(500), opts.PartitionPeekLimit(context.Background(), "ss6"))
+		limits["ss3"] = 1000
+		require.Equal(t, int64(1000), opts.PartitionPeekLimit(context.Background(), "ss3"))
+		require.Equal(t, int64(PartitionPeekMax), opts.PartitionPeekLimit(context.Background(), "other"))
+	})
 }

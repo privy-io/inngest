@@ -17,12 +17,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/inngest/inngest/pkg/api/apiv1/apiv1auth"
 	"github.com/inngest/inngest/pkg/consts"
+	"github.com/inngest/inngest/pkg/cqrs"
 	"github.com/inngest/inngest/pkg/enums"
+	"github.com/inngest/inngest/pkg/execution"
 	"github.com/inngest/inngest/pkg/logger"
 	"github.com/inngest/inngest/pkg/tracing"
 	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/tracing/metadata"
-	"github.com/inngest/inngest/pkg/util"
 	"github.com/oklog/ulid/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -139,6 +140,8 @@ func (a router) traces(w http.ResponseWriter, r *http.Request) {
 		if msg == "" {
 			msg = "extended trace bytes cap exceeded for current billing period"
 		}
+		// Larger than any SDK's OTLP export timeout, so clients drop instead of retrying.
+		w.Header().Set("Retry-After", "60")
 		respondError(w, r, http.StatusTooManyRequests, msg)
 		return
 	}
@@ -318,9 +321,11 @@ func (a router) commitSpan(ctx context.Context, l logger.Logger, auth apiv1auth.
 	tenantAttrs := meta.NewAttrSet(
 		meta.Attr(meta.Attrs.RunID, &runID),
 		meta.Attr(meta.Attrs.AppID, &fn.AppID),
+		// TODO: add this somehow, meta.Attr(meta.Attrs.AppName, &app.Name),
 		meta.Attr(meta.Attrs.FunctionID, &functionID),
-		meta.Attr(meta.Attrs.AccountID, util.ToPtr(auth.AccountID())),
-		meta.Attr(meta.Attrs.EnvID, util.ToPtr(auth.WorkspaceID())),
+		meta.Attr(meta.Attrs.FunctionSlug, &fn.Slug),
+		meta.Attr(meta.Attrs.AccountID, new(auth.AccountID())),
+		meta.Attr(meta.Attrs.EnvID, new(auth.WorkspaceID())),
 	)
 
 	// By default, the parent span is the trace ref we found.
@@ -404,6 +409,8 @@ func (a router) commitSpan(ctx context.Context, l logger.Logger, auth apiv1auth.
 		return fmt.Errorf("failed to create span: %w", err)
 	}
 
+	a.emitUserlandSpan(ctx, l, runID, fn, auth, parent, s, attrs)
+
 	addTenantIDs := func(cfg *tracing.MetadataSpanConfig) {
 		cfg.Attrs = cfg.Attrs.Merge(tenantAttrs)
 	}
@@ -412,10 +419,7 @@ func (a router) commitSpan(ctx context.Context, l logger.Logger, auth apiv1auth.
 		l := l.With("step_metadata", true)
 		md, err := a.opts.MetadataOpts.SpanExtractor.ExtractSpanMetadata(ctx, s)
 		if err != nil {
-			warnings := metadata.ExtractWarnings(err)
-			if len(warnings) > 0 {
-				md = append(md, warnings)
-			}
+			md = append(md, metadata.ExtractWarnings(err).Structured()...)
 		}
 
 		for _, m := range md {
@@ -429,6 +433,7 @@ func (a router) commitSpan(ctx context.Context, l logger.Logger, auth apiv1auth.
 				m,
 				enums.MetadataScopeExtendedTrace,
 				addTenantIDs,
+				tracing.WithMetadataSyncListeners(a.opts.SyncLifecycleListeners...),
 			)
 			if err != nil {
 				l.Error("failed to create metadata span", "err", err)
@@ -438,6 +443,42 @@ func (a router) commitSpan(ctx context.Context, l logger.Logger, auth apiv1auth.
 	}
 
 	return nil
+}
+
+// emitUserlandSpan fans a committed userland (extended-trace) span out to
+// every registered execution.SyncLifecycleListener -- currently only DuckDB
+// dual-write (pkg/execution/dualwrite), which creates its own equivalent
+// span through its private TracerProvider rather than reusing this one
+// (this endpoint's span is created through the real, SQLite-backed
+// TracerProvider).
+func (a router) emitUserlandSpan(ctx context.Context, l logger.Logger, runID ulid.ULID, fn *cqrs.Function, auth apiv1auth.V1Auth, parent *meta.SpanReference, s *tracev1.Span, attrs []attribute.KeyValue) {
+	if len(a.opts.SyncLifecycleListeners) == 0 {
+		return
+	}
+
+	span := execution.ExtendedTraceSpan{
+		AccountID: auth.AccountID(),
+		EnvID:     auth.WorkspaceID(),
+		AppID:     fn.AppID,
+		// AppName: intentionally left empty. Resolving it means an extra
+		// synchronous lookup (cqrs.AppReader.GetAppByID) on the OTLP
+		// span-ingestion hot path per userland span -- unsafe to add here
+		// until that lookup is cached/batched or made async. TODO: populate
+		// this once that's in place.
+		FunctionID:   fn.ID,
+		FunctionSlug: fn.Slug,
+		RunID:        runID,
+		Parent:       parent,
+		SpanID:       trace.SpanID(s.SpanId),
+		Name:         s.Name,
+		StartTime:    time.Unix(0, int64(s.StartTimeUnixNano)),
+		EndTime:      time.Unix(0, int64(s.EndTimeUnixNano)),
+		Attributes:   attrs,
+	}
+
+	execution.SafelyInvokeSyncListeners(ctx, l, a.opts.SyncLifecycleListeners, "OnExtendedTraceSpan", func(listener execution.SyncLifecycleListener) {
+		listener.OnExtendedTraceSpan(ctx, span)
+	})
 }
 
 func getInngestTraceRef(s *tracev1.Span) (*meta.SpanReference, error) {

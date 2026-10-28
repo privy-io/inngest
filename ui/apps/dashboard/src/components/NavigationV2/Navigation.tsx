@@ -9,7 +9,6 @@ import {
   monitor,
   sandboxesItem,
   scoresItem,
-  sessionsItem,
   workflow,
   type NavGroupConfig,
   type NavItemConfig,
@@ -27,12 +26,15 @@ export const getNavRoute = (activeEnv: EnvType, link: string) =>
 
 export default function Navigation({ collapsed, activeEnv }: NavProps) {
   const isAIOverviewEnabled = useBooleanFlag('ai-overview-dashboard', false);
+  const isLegacyScoresPageEnabled = useBooleanFlag(
+    'legacy-scores-page-enabled',
+    false,
+  );
 
   const aiItems: NavItemConfig[] = [
     ...(isAIOverviewEnabled.value ? [aiOverviewItem] : []),
     experimentsItem,
-    scoresItem,
-    sessionsItem,
+    ...(isLegacyScoresPageEnabled.value ? [scoresItem] : []),
     sandboxesItem,
   ];
 

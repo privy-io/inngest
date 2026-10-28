@@ -3,19 +3,41 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/inngest/inngest/pkg/consts"
+	"github.com/inngest/inngest/pkg/enums"
+	"github.com/inngest/inngest/pkg/execution"
 	statev2 "github.com/inngest/inngest/pkg/execution/state/v2"
+	"github.com/inngest/inngest/pkg/logger"
 	"github.com/inngest/inngest/pkg/telemetry/metrics"
 	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/tracing/metadata"
 	"github.com/inngest/inngest/pkg/tracing/metadata/extractors"
+	"github.com/inngest/inngest/pkg/util"
+	"github.com/oklog/ulid/v2"
 )
 
 type MetadataSpanAttrOpts func(cfg *MetadataSpanConfig)
 
 type MetadataSpanConfig struct {
 	Attrs *meta.SerializableAttrs
+
+	// SyncListeners are notified synchronously, via OnMetadataEntry, right
+	// after this span is created -- mirroring
+	// execution.SyncLifecycleListener's dual-write hooks for run/step/
+	// userland spans (see pkg/execution/dualwrite). Nil/empty is a no-op;
+	// only a caller wiring DuckDB dual-write sets this today.
+	SyncListeners []execution.SyncLifecycleListener
+}
+
+// WithMetadataSyncListeners registers listeners to notify synchronously
+// after a metadata span is created -- see MetadataSpanConfig.SyncListeners.
+func WithMetadataSyncListeners(ls ...execution.SyncLifecycleListener) MetadataSpanAttrOpts {
+	return func(cfg *MetadataSpanConfig) {
+		cfg.SyncListeners = append(cfg.SyncListeners, ls...)
+	}
 }
 
 func CreateMetadataSpan(ctx context.Context, tracerProvider TracerProvider, parent *meta.SpanReference, location, pkgName string, stateMetadata *statev2.Metadata, spanMetadata metadata.Structured, scope metadata.Scope, opts ...MetadataSpanAttrOpts) (*meta.SpanReference, error) {
@@ -24,27 +46,70 @@ func CreateMetadataSpan(ctx context.Context, tracerProvider TracerProvider, pare
 		return nil, fmt.Errorf("failed to serialize metadata: %w", err)
 	}
 
-	return CreateMetadataSpanFromValues(ctx, tracerProvider, parent, location, pkgName, stateMetadata, spanMetadata.Kind(), spanMetadata.Op(), values, scope, opts...)
+	return CreateMetadataSpanFromValues(ctx, tracerProvider, parent, location, pkgName, stateMetadata, spanMetadata.Kind(), incomingOp(spanMetadata), values, scope, opts...)
+}
+
+// incomingOp returns the op an SDK sent w/ md. Only SDK updates carry one,
+// metadata the server builds itself is always a set.
+func incomingOp(md metadata.Structured) metadata.Opcode {
+	if u, ok := md.(interface{ Op() metadata.Opcode }); ok {
+		return u.Op()
+	}
+	return enums.MetadataOpcodeSet
 }
 
 // CreateMetadataSpanFromValues creates a metadata span from pre-serialized values,
 // avoiding redundant serialization when the caller has already called Serialize.
-func CreateMetadataSpanFromValues(ctx context.Context, tracerProvider TracerProvider, parent *meta.SpanReference, location, pkgName string, stateMetadata *statev2.Metadata, kind metadata.Kind, op metadata.Opcode, values metadata.Values, scope metadata.Scope, opts ...MetadataSpanAttrOpts) (*meta.SpanReference, error) {
-	// Every metadata span, regardless of caller, passes through here — so
-	// this is the single chokepoint to backfill EstimatedCost for
-	// "inngest.ai" metadata that arrived without one (e.g. submitted
-	// directly via inngest.metadata.update or the AddRunMetadata API,
-	// bypassing the AIMetadata-producing extractors). A no-op when
-	// EstimatedCost is already set.
-	if kind == extractors.KindInngestAI {
-		extractors.BackfillEstimatedCostInValues(values)
+//
+// Every metadata span is written as a set (a full replace of its (span, kind)),
+// regardless of incomingOp. incomingOp is whatever op the writer sent and is
+// only recorded in metrics, so older SDKs that send merge keep working.
+func CreateMetadataSpanFromValues(ctx context.Context, tracerProvider TracerProvider, parent *meta.SpanReference, location, pkgName string, stateMetadata *statev2.Metadata, kind metadata.Kind, incomingOp metadata.Opcode, values metadata.Values, scope metadata.Scope, opts ...MetadataSpanAttrOpts) (*meta.SpanReference, error) {
+	if incomingOp != enums.MetadataOpcodeSet {
+		metrics.IncrMetadataNonSetOpsTotal(ctx, metrics.CounterOpt{
+			PkgName: pkgName,
+			Tags: map[string]any{
+				"kind": metadataKindTag(kind),
+				"op":   incomingOp.String(),
+			},
+		})
 	}
 
-	spanSize := values.Size()
+	// Legacy multi key score/warning writes are split into one span per
+	// score/warning so a set of one doesn't replace the others.
+	writes, split := metadata.SplitLegacy(kind, values)
+	if split {
+		metrics.IncrMetadataLegacySplitsTotal(ctx, metrics.CounterOpt{
+			PkgName: pkgName,
+			Tags: map[string]any{
+				"kind": kind.String(),
+			},
+		})
+	} else {
+		writes = []metadata.KindValues{{Kind: kind, Values: values}}
+	}
 
-	// Per-span size limit
-	if spanSize > consts.MaxMetadataSpanSize {
-		return nil, metadata.ErrMetadataSpanTooLarge
+	sizes := make([]int, len(writes))
+	totalSize := 0
+	for i, w := range writes {
+		// Every metadata span, regardless of caller, passes through here -- so
+		// this is the single chokepoint to backfill EstimatedCost for
+		// "inngest.ai" metadata that arrived without one (e.g. submitted
+		// directly via inngest.metadata.update or the AddRunMetadata API,
+		// bypassing the AIMetadata-producing extractors). A no-op when
+		// EstimatedCost is already set.
+		if w.Kind == extractors.KindInngestAI {
+			extractors.BackfillEstimatedCostInValues(w.Values)
+		}
+
+		sizes[i] = w.Values.Size()
+
+		// Per-span size limit, checked for every split span before any is
+		// created so a split write is all or nothing.
+		if sizes[i] > consts.MaxMetadataSpanSize {
+			return nil, metadata.ErrMetadataSpanTooLarge
+		}
+		totalSize += sizes[i]
 	}
 
 	// Per-run cumulative size limit. Skip when stateMetadata is nil.
@@ -53,12 +118,38 @@ func CreateMetadataSpanFromValues(ctx context.Context, tracerProvider TracerProv
 	// counter under a mutex, which is safe for concurrent access from
 	// parallel step handlers (handleGeneratorGroup).
 	if stateMetadata != nil {
-		if !stateMetadata.Metrics.TryAddMetadataSize(spanSize, consts.MaxRunMetadataSize) {
+		if !stateMetadata.Metrics.TryAddMetadataSize(totalSize, consts.MaxRunMetadataSize) {
 			return nil, metadata.ErrRunMetadataSizeExceeded
 		}
 	}
 
-	attrs := RawMetadataAttrs(kind, values, op)
+	// A split write returns the ref of its last span. A legacy write w/ no
+	// keys has nothing to write and returns a nil ref.
+	var ref *meta.SpanReference
+	for i, w := range writes {
+		var err error
+		ref, err = createMetadataSpan(ctx, tracerProvider, parent, location, pkgName, stateMetadata, w.Kind, w.Values, scope, opts...)
+		if err != nil {
+			// Roll back the optimistic size increment for the spans that
+			// weren't created.
+			if stateMetadata != nil {
+				unwritten := 0
+				for _, size := range sizes[i:] {
+					unwritten += size
+				}
+				stateMetadata.Metrics.RollbackMetadataSize(unwritten)
+			}
+			return nil, err
+		}
+	}
+
+	return ref, nil
+}
+
+// createMetadataSpan creates a single metadata span & notifies the sync
+// listeners. Size limits are already checked by CreateMetadataSpanFromValues.
+func createMetadataSpan(ctx context.Context, tracerProvider TracerProvider, parent *meta.SpanReference, location, pkgName string, stateMetadata *statev2.Metadata, kind metadata.Kind, values metadata.Values, scope metadata.Scope, opts ...MetadataSpanAttrOpts) (*meta.SpanReference, error) {
+	attrs := RawMetadataAttrs(kind, values)
 	meta.AddAttr(attrs, meta.Attrs.MetadataScope, &scope)
 
 	cfg := MetadataSpanConfig{
@@ -68,15 +159,10 @@ func CreateMetadataSpanFromValues(ctx context.Context, tracerProvider TracerProv
 		opt(&cfg)
 	}
 
-	kindTag := kind.String()
-	if kind.IsUser() {
-		kindTag = fmt.Sprintf("%s*", metadata.KindPrefixUserland)
-	}
-
 	metrics.IncrMetadataSpansTotal(ctx, metrics.CounterOpt{
 		PkgName: pkgName,
 		Tags: map[string]any{
-			"kind": kindTag,
+			"kind": metadataKindTag(kind),
 		},
 	})
 	ref, err := tracerProvider.CreateSpan(
@@ -94,18 +180,119 @@ func CreateMetadataSpanFromValues(ctx context.Context, tracerProvider TracerProv
 		},
 	)
 	if err != nil {
-		// Roll back the optimistic size increment on span creation failure.
-		if stateMetadata != nil {
-			stateMetadata.Metrics.RollbackMetadataSize(spanSize)
-		}
 		return nil, err
+	}
+
+	if len(cfg.SyncListeners) > 0 {
+		if entry, ok := buildSyncMetadataEntry(cfg.Attrs, parent, stateMetadata, kind, scope, values); ok {
+			execution.SafelyInvokeSyncListeners(ctx, logger.StdlibLogger(ctx), cfg.SyncListeners, "OnMetadataEntry", func(l execution.SyncLifecycleListener) {
+				l.OnMetadataEntry(ctx, entry)
+			})
+		} else {
+			logger.StdlibLogger(ctx).Error("tracing: metadata span sync dispatch missing run ID", "location", util.SanitizeLogField(location), "kind", util.SanitizeLogField(kind.String()))
+		}
 	}
 
 	return ref, nil
 }
 
-func RawMetadataAttrs(kind metadata.Kind, values metadata.Values, op metadata.Opcode) *meta.SerializableAttrs {
+// buildSyncMetadataEntry assembles an execution.MetadataEntry for
+// OnMetadataEntry from the same inputs CreateMetadataSpanFromValues already
+// has -- tenant/run identity comes from stateMetadata when the caller
+// provided one (the executor and AddRunMetadata always do), falling back to
+// attrs (already resolved by the time this runs, regardless of whether the
+// caller set them via stateMetadata or an option like addTenantIDs) for the
+// one call site that has neither (pkg/api/apiv1/traces.go's
+// commitSpanMetadata). ok is false when neither source yields a run ID,
+// since a row with no run ID can't be joined onto anything.
+func buildSyncMetadataEntry(attrs *meta.SerializableAttrs, parent *meta.SpanReference, stateMetadata *statev2.Metadata, kind metadata.Kind, scope metadata.Scope, values metadata.Values) (execution.MetadataEntry, bool) {
+	entry := execution.MetadataEntry{
+		Parent:    parent,
+		Kind:      kind,
+		Scope:     scope,
+		Values:    values,
+		CreatedAt: time.Now(),
+	}
+
+	if stateMetadata != nil {
+		entry.AccountID = stateMetadata.ID.Tenant.AccountID
+		entry.EnvID = stateMetadata.ID.Tenant.EnvID
+		entry.AppID = stateMetadata.ID.Tenant.AppID
+		entry.FunctionID = stateMetadata.ID.FunctionID
+		entry.RunID = stateMetadata.ID.RunID
+	} else {
+		if v, ok := meta.GetAttr(attrs, meta.Attrs.AccountID); ok && v != nil {
+			entry.AccountID = *v
+		}
+		if v, ok := meta.GetAttr(attrs, meta.Attrs.EnvID); ok && v != nil {
+			entry.EnvID = *v
+		}
+		if v, ok := meta.GetAttr(attrs, meta.Attrs.AppID); ok && v != nil {
+			entry.AppID = *v
+		}
+		if v, ok := meta.GetAttr(attrs, meta.Attrs.FunctionID); ok && v != nil {
+			entry.FunctionID = *v
+		}
+		v, ok := meta.GetAttr(attrs, meta.Attrs.RunID)
+		if !ok || v == nil || *v == (ulid.ULID{}) {
+			return execution.MetadataEntry{}, false
+		}
+		entry.RunID = *v
+	}
+
+	// Step identity is carried on attrs regardless of whether stateMetadata
+	// is set -- every caller that knows it's operating on a step adds it via
+	// a MetadataSpanAttrOpts (e.g. the executor's createMetadataSpanOnParent,
+	// apiv1/metadata.go's addTenantIDs), independently of tenant/run
+	// identity's source above.
+	//
+	// StepHashedID reads meta.Attrs.StepID, the internal hashed step ID
+	// generatorAttrs always sets from op.ID -- kept separately from StepID
+	// below so a consumer can always join on it even when the SDK-facing ID
+	// isn't available.
+	if v, ok := meta.GetAttr(attrs, meta.Attrs.StepID); ok && v != nil {
+		entry.StepHashedID = *v
+	}
+	// StepID prefers meta.Attrs.StepUserlandID (the SDK-facing ID) since
+	// that's what's displayed to users, falling back to the hashed ID when
+	// userland isn't present -- not every opcode/SDK version populates
+	// op.Userland (see generatorAttrs), which would otherwise leave StepID
+	// empty for step-scoped metadata in production.
+	if v, ok := meta.GetAttr(attrs, meta.Attrs.StepUserlandID); ok && v != nil {
+		entry.StepID = *v
+	} else {
+		entry.StepID = entry.StepHashedID
+	}
+	if v, ok := meta.GetAttr(attrs, meta.Attrs.StepUserlandIndex); ok && v != nil {
+		entry.StepIndex = v
+	}
+	if v, ok := meta.GetAttr(attrs, meta.Attrs.StepAttempt); ok && v != nil {
+		entry.StepAttempt = v
+	}
+
+	return entry, true
+}
+
+// metadataKindTag collapses kinds w/ a user or per name suffix so they don't
+// blow up the metric tag cardinality.
+func metadataKindTag(kind metadata.Kind) string {
+	switch {
+	case kind.IsUser():
+		return metadata.KindPrefixUserland + "*"
+	case strings.HasPrefix(kind.String(), metadata.KindPrefixInngestScore):
+		return metadata.KindPrefixInngestScore + "*"
+	case strings.HasPrefix(kind.String(), metadata.KindPrefixInngestWarning):
+		return metadata.KindPrefixInngestWarning + "*"
+	default:
+		return kind.String()
+	}
+}
+
+// RawMetadataAttrs builds the metadata span attrs. The op is always set, see
+// CreateMetadataSpanFromValues.
+func RawMetadataAttrs(kind metadata.Kind, values metadata.Values) *meta.SerializableAttrs {
 	rawAttrs := meta.NewAttrSet()
+	op := enums.MetadataOpcodeSet
 
 	meta.AddAttr(rawAttrs, meta.Attrs.MetadataKind, &kind)
 	meta.AddAttr(rawAttrs, meta.Attrs.Metadata, &values)
@@ -120,7 +307,7 @@ func MetadataAttrs(metadata metadata.Structured) (*meta.SerializableAttrs, error
 		return nil, err
 	}
 
-	return RawMetadataAttrs(metadata.Kind(), rawMetadata, metadata.Op()), nil
+	return RawMetadataAttrs(metadata.Kind(), rawMetadata), nil
 }
 
 func MetadataSpanIDSeed(parentID string, kind metadata.Kind) []byte {

@@ -7,25 +7,41 @@ import {
   HorizontalPlanCard,
   VerticalPlanCard,
 } from '@/components/Billing/Plans/PlanCard';
-import { type Plan } from '@/components/Billing/Plans/utils';
-import { currentPlan as getCurrentPlan } from '@/queries/server/billing';
+import {
+  pickSelfServePlans,
+  type Plan,
+} from '@/components/Billing/Plans/utils';
+import {
+  currentPlan as getCurrentPlan,
+  plans as getPlans,
+} from '@/queries/server/billing';
 import { pathCreator } from '@/utils/urls';
 
 export const Route = createFileRoute('/_authed/billing/plans/')({
   component: BillingPlansPage,
   loader: async () => {
-    const { plan: currentPlan } = await getCurrentPlan();
+    const [{ plan: currentPlan }, availablePlans] = await Promise.all([
+      getCurrentPlan(),
+      getPlans(),
+    ]);
 
     if (!currentPlan) throw new Error('Failed to fetch current plan');
+    const availableSelfServePlans = Object.values(
+      pickSelfServePlans(availablePlans),
+    ).filter((plan) => plan !== null);
+    if (availableSelfServePlans.length === 0) {
+      throw new Error('Failed to fetch available plans');
+    }
 
     return {
+      availableSelfServePlans,
       currentPlan,
     };
   },
 });
 
 function BillingPlansPage() {
-  const { currentPlan } = Route.useLoaderData();
+  const { availableSelfServePlans, currentPlan } = Route.useLoaderData();
   const { isLoaded: orgLoaded, membership } = useOrganization();
   const isAdmin = membership?.role === 'org:admin';
 
@@ -33,37 +49,8 @@ function BillingPlansPage() {
     return await getCurrentPlan();
   };
 
-  //
-  // Hard-coded plan information (mirrors pricing page definitions)
   const plans: Plan[] = [
-    {
-      id: 'n/a',
-      slug: 'hobby-free-2025-08-08',
-      name: 'Hobby',
-      amount: 0,
-      billingPeriod: 'month',
-      entitlements: {
-        concurrency: { limit: 5 },
-        history: { limit: 1 }, // 24h
-        runCount: { limit: 50_000 },
-      },
-      isLegacy: false,
-      isFree: true,
-    },
-    {
-      id: 'n/a',
-      slug: 'pro-2026-06-29',
-      name: 'Pro',
-      amount: 9900,
-      billingPeriod: 'month',
-      entitlements: {
-        concurrency: { limit: 100 },
-        history: { limit: 7 },
-        runCount: { limit: 1_000_000 },
-      },
-      isLegacy: false,
-      isFree: false,
-    },
+    ...availableSelfServePlans,
     {
       id: 'n/a',
       slug: 'enterprise',
@@ -98,7 +85,15 @@ function BillingPlansPage() {
         </div>
       )}
       <p className="text-subtle mb-4">Available plans</p>
-      <div className="mb-4 grid grid-cols-3 gap-4">
+      <div
+        className={`mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 ${
+          plans.length === 4
+            ? 'xl:grid-cols-4'
+            : plans.length === 3
+            ? 'xl:grid-cols-3'
+            : 'xl:grid-cols-2'
+        }`}
+      >
         {plans.map((plan) => (
           <VerticalPlanCard
             key={plan.id}

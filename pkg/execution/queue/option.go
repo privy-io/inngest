@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,20 @@ type AccountShardIterationEnabled func(ctx context.Context, accountID uuid.UUID)
 // be ignored for an account while semaphores are rolled out.
 type DisableSemaphoreConstraintChecks func(ctx context.Context, accountID uuid.UUID) bool
 
+// CapacityReleaseWakeEnabled controls whether Redis partitions are woken, and
+// skip cached constraint exhaustion on their next scan, after capacity is
+// released for an account.
+type CapacityReleaseWakeEnabled func(ctx context.Context, accountID uuid.UUID) bool
+
+// BypassArchivedWorkspaceAppSemaphore reports whether the app semaphore may be
+// omitted so an item for an archived workspace can reach executor cleanup.
+type BypassArchivedWorkspaceAppSemaphore func(ctx context.Context, accountID, workspaceID uuid.UUID) bool
+
+// PermanentConstraintErrorHandler cleans up application state associated with
+// a queue item that cannot be routed to its configured constraint shard. The
+// queue only dequeues the item after this handler succeeds.
+type PermanentConstraintErrorHandler func(ctx context.Context, item QueueItem, cause error) error
+
 // QueueItemEarliestPeekTimeConfig controls earliest-peek-time side-key stamping.
 // Items already visited by the iterator are stamped individually when Enabled is
 // true. BulkStampLimit is only the additional tail budget used if the iterator
@@ -80,6 +95,28 @@ func WithPartitionPausedGetter(partitionPausedGetter PartitionPausedGetter) Queu
 	return func(q *QueueOptions) {
 		q.PartitionPausedGetter = partitionPausedGetter
 	}
+}
+
+// WithPartitionPeekMaxGetter overrides the partition scan limit at runtime for
+// each queue shard. The getter may be called concurrently and must be safe for
+// concurrent use. Non-positive values fall back to PartitionPeekMax.
+func WithPartitionPeekMaxGetter(getter func(context.Context, string) int64) QueueOpt {
+	return func(q *QueueOptions) {
+		q.partitionPeekMaxGetter = getter
+	}
+}
+
+// PartitionPeekLimit returns the current partition peek limit for a shard.
+// The default is PartitionPeekMax, but this can be overridden by WithPartitionPeekMaxGetter.
+// Positive values are clamped between PartitionSelectionMax and AbsolutePartitionPeekMax.
+func (o *QueueOptions) PartitionPeekLimit(ctx context.Context, shardName string) int64 {
+	limit := int64(PartitionPeekMax)
+	if o.partitionPeekMaxGetter != nil {
+		if value := o.partitionPeekMaxGetter(ctx, shardName); value > 0 {
+			limit = value
+		}
+	}
+	return min(max(limit, PartitionSelectionMax), AbsolutePartitionPeekMax)
 }
 
 func WithAccountPriorityFinder(apf AccountPriorityFinder) QueueOpt {
@@ -222,6 +259,22 @@ func (o QueueOptions) PausedRequeueExtension() time.Duration {
 		return PartitionPausedRequeueExtension
 	}
 	return o.pausedRequeueExtension
+}
+
+// WithSemaphoreRequeueExtension overrides how far into the future a partition
+// is requeued when only the local semaphore limit is reached. When not set (or
+// non-positive), PartitionSemaphoreLimitRequeueExtension is used.
+func WithSemaphoreRequeueExtension(d time.Duration) QueueOpt {
+	return func(q *QueueOptions) {
+		q.semaphoreRequeueExtension = d
+	}
+}
+
+func (o QueueOptions) SemaphoreRequeueExtension() time.Duration {
+	if o.semaphoreRequeueExtension <= 0 {
+		return PartitionSemaphoreLimitRequeueExtension
+	}
+	return o.semaphoreRequeueExtension
 }
 
 func WithPeekConcurrencyMultiplier(m int64) QueueOpt {
@@ -427,6 +480,7 @@ type QueueRunMode struct {
 }
 
 type QueueOptions struct {
+	itemHints                        *ItemHintOptions
 	PartitionPriorityFinder          PartitionPriorityFinder
 	AccountPriorityFinder            AccountPriorityFinder
 	AccountExists                    AccountExists
@@ -462,8 +516,9 @@ type QueueOptions struct {
 	// numBacklogNormalizationWorkers stores the maximum number of workers available to concurrenctly scan normalization partitions
 	numBacklogNormalizationWorkers int32
 	// peek min & max sets the range for partitions to peek for items
-	PeekMin int64
-	PeekMax int64
+	PeekMin                int64
+	PeekMax                int64
+	partitionPeekMaxGetter func(context.Context, string) int64
 	// PeekSizeExponent is the exp. on the random skewed distribution
 	PeekSizeExponent float64
 	// usePeekEWMA specifies whether we should use EWMA for peeking.
@@ -477,6 +532,12 @@ type QueueOptions struct {
 	queueKindMapping        map[string]string
 	queueProducer           Producer
 	queueConsumer           Consumer
+	queueRunReader          RunQueueReader
+	queueStatusReader       QueueStatusReader
+	queuePartitionReader    QueuePartitionReader
+	queueBacklogReader      QueueBacklogReader
+	queueItemReader         QueueItemReader
+	queueAttemptResetter    AttemptResetter
 	disableFifoForFunctions map[string]struct{}
 	disableFifoForAccounts  map[string]struct{}
 	peekSizeForFunctions    map[string]int64
@@ -522,6 +583,10 @@ type QueueOptions struct {
 	// requeued when it is confirmed paused in the database. Falls back to
 	// PartitionPausedRequeueExtension when unset.
 	pausedRequeueExtension time.Duration
+	// semaphoreRequeueExtension is how far into the future a partition is
+	// requeued when only the local semaphore limit is reached. Falls back to
+	// PartitionSemaphoreLimitRequeueExtension when unset.
+	semaphoreRequeueExtension time.Duration
 
 	NormalizeRefreshItemCustomConcurrencyKeys NormalizeRefreshItemCustomConcurrencyKeysFn
 	RefreshItemThrottle                       RefreshItemThrottleFn
@@ -531,10 +596,13 @@ type QueueOptions struct {
 	latencyPartition *LatencyPartitionOptions
 
 	CapacityManager                     constraintapi.CapacityManager
+	PermanentConstraintErrorHandler     PermanentConstraintErrorHandler
 	EnableCapacityLeaseInstrumentation  constraintapi.EnableHighCardinalityInstrumentation
 	CapacityLeaseExtendInterval         time.Duration
 	AcquireCapacityLeaseOnBacklogRefill bool
 	DisableSemaphoreConstraintChecks    DisableSemaphoreConstraintChecks
+	BypassArchivedWorkspaceAppSemaphore BypassArchivedWorkspaceAppSemaphore
+	CapacityReleaseWakeEnabled          CapacityReleaseWakeEnabled
 
 	ConditionalTracer trace.ConditionalTracer
 
@@ -651,9 +719,50 @@ func WithQueueConsumer(consumer Consumer) QueueOpt {
 	}
 }
 
+// WithQueueRunReader overrides the queue's default run reader.
+func WithQueueRunReader(reader RunQueueReader) QueueOpt {
+	return func(q *QueueOptions) { q.queueRunReader = reader }
+}
+
+// WithQueueStatusReader overrides the queue's default status reader.
+func WithQueueStatusReader(reader QueueStatusReader) QueueOpt {
+	return func(q *QueueOptions) { q.queueStatusReader = reader }
+}
+
+// WithQueuePartitionReader overrides the queue's default partition reader.
+func WithQueuePartitionReader(reader QueuePartitionReader) QueueOpt {
+	return func(q *QueueOptions) { q.queuePartitionReader = reader }
+}
+
+// WithQueueBacklogReader overrides the queue's default backlog reader.
+func WithQueueBacklogReader(reader QueueBacklogReader) QueueOpt {
+	return func(q *QueueOptions) { q.queueBacklogReader = reader }
+}
+
+// WithQueueItemReader overrides the queue's default item reader.
+func WithQueueItemReader(reader QueueItemReader) QueueOpt {
+	return func(q *QueueOptions) { q.queueItemReader = reader }
+}
+
+// WithQueueAttemptResetter overrides the queue's default shard-backed attempt resetter.
+func WithQueueAttemptResetter(resetter AttemptResetter) QueueOpt {
+	return func(q *QueueOptions) {
+		q.queueAttemptResetter = resetter
+	}
+}
+
 func WithCapacityManager(capacityManager constraintapi.CapacityManager) QueueOpt {
 	return func(q *QueueOptions) {
 		q.CapacityManager = capacityManager
+	}
+}
+
+// WithPermanentConstraintErrorHandler allows permanently unroutable queue
+// items to be cleaned up and dequeued instead of blocking every future scan.
+// Without this option, the queue retains its existing retry behavior.
+func WithPermanentConstraintErrorHandler(handler PermanentConstraintErrorHandler) QueueOpt {
+	return func(q *QueueOptions) {
+		q.PermanentConstraintErrorHandler = handler
 	}
 }
 
@@ -678,6 +787,20 @@ func WithAcquireCapacityLeaseOnBacklogRefill(acquire bool) QueueOpt {
 func WithDisableSemaphoreConstraintChecks(f DisableSemaphoreConstraintChecks) QueueOpt {
 	return func(q *QueueOptions) {
 		q.DisableSemaphoreConstraintChecks = f
+	}
+}
+
+func WithBypassArchivedWorkspaceAppSemaphore(f BypassArchivedWorkspaceAppSemaphore) QueueOpt {
+	return func(q *QueueOptions) {
+		q.BypassArchivedWorkspaceAppSemaphore = f
+	}
+}
+
+// WithCapacityReleaseWakeEnabled gates CapacityReleaseNotifier wakes per
+// account. When unset, wakes are disabled for every account.
+func WithCapacityReleaseWakeEnabled(f CapacityReleaseWakeEnabled) QueueOpt {
+	return func(q *QueueOptions) {
+		q.CapacityReleaseWakeEnabled = f
 	}
 }
 
@@ -744,7 +867,9 @@ type ProcessItem struct {
 	CapacityLease *CapacityLease
 
 	ConditionalTraceCtx context.Context
-	result              *dispatchedItemHandle
+	// fromHint identifies the dispatch that won the lease, not enqueue intent.
+	fromHint bool
+	result   *dispatchedItemHandle
 }
 
 type capacityLease struct {
@@ -910,11 +1035,32 @@ func (q *queueProcessor) configureQueueRoles() {
 	q.roles = filterQueueRoles(q.QueueOptions, q.roles)
 }
 
+// configureScannerRoles appends roles declared by the selected scanner.
+// Registration happens after shard selection and before role goroutines start,
+// which also supports dynamically assigned shard groups.
+func (q *queueProcessor) configureScannerRoles(scanner QueueScanner) error {
+	provider, ok := scanner.(QueueScannerRoleProvider)
+	if !ok {
+		return nil
+	}
+	provided := filterQueueRoles(q.QueueOptions, provider.QueueScannerRoles())
+	existing := make(map[string]struct{}, len(q.roles)+len(provided))
+	for _, role := range q.roles {
+		existing[role.Name()] = struct{}{}
+	}
+	for _, role := range provided {
+		name := role.Name()
+		if _, ok := existing[name]; ok {
+			return fmt.Errorf("queue scanner role %q is already configured", name)
+		}
+		existing[name] = struct{}{}
+	}
+	q.roles = append(q.roles, provided...)
+	return nil
+}
+
 func (q *queueProcessor) defaultQueueRoles() []QueueRole {
 	roles := []QueueRole{}
-	if includeSequentialRole(q.QueueOptions) {
-		roles = append(roles, NewSequentialRole())
-	}
 	if q.runMode.Scavenger {
 		roles = append(roles, NewScavengerRole())
 	}

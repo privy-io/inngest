@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/inngest/inngest/pkg/enums"
 	"github.com/inngest/inngest/pkg/tracing/metadata"
-	"github.com/inngest/inngest/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -68,7 +66,6 @@ func TestAIMetadataExtractor_OpenAISpan(t *testing.T) {
 	require.Len(t, md, 1, "Expected exactly one metadata item")
 
 	assert.Equal(t, metadata.Kind("inngest.ai"), md[0].Kind())
-	assert.Equal(t, enums.MetadataOpcodeMerge, md[0].Op())
 
 	// Verify the extracted data content
 	raw, err := md[0].Serialize()
@@ -155,14 +152,14 @@ func TestExtractAIMetadata_TotalTokens(t *testing.T) {
 				// 100 != 17 + 44
 				intAttr("gen_ai.usage.total_tokens", 100),
 			},
-			want: util.ToPtr[int64](100),
+			want: new(int64(100)),
 		},
 		{
 			name: "computed from input only when total absent",
 			attrs: []*commonv1.KeyValue{
 				intAttr("gen_ai.usage.input_tokens", 10),
 			},
-			want: util.ToPtr[int64](10),
+			want: new(int64(10)),
 		},
 		{
 			name: "computed from input+output when total absent",
@@ -170,7 +167,7 @@ func TestExtractAIMetadata_TotalTokens(t *testing.T) {
 				intAttr("gen_ai.usage.input_tokens", 56),
 				intAttr("gen_ai.usage.output_tokens", 30),
 			},
-			want: util.ToPtr[int64](86),
+			want: new(int64(86)),
 		},
 	}
 
@@ -232,7 +229,6 @@ func TestExtractAIOutputMetadata_VercelAISDK(t *testing.T) {
 	require.Len(t, md, 1, "Expected exactly one metadata item")
 
 	assert.Equal(t, metadata.Kind("inngest.ai"), md[0].Kind())
-	assert.Equal(t, enums.MetadataOpcodeMerge, md[0].Op())
 
 	// Serialize and verify the content
 	raw, err := md[0].Serialize()
@@ -376,7 +372,7 @@ func TestBackfillEstimatedCostInValues(t *testing.T) {
 				"response_model": "gpt-4o",
 			},
 			wantCost:  true,
-			wantExact: util.ToPtr(12.5),
+			wantExact: new(12.5),
 		},
 		{
 			name: "falls back to request model when response model absent",
@@ -386,7 +382,7 @@ func TestBackfillEstimatedCostInValues(t *testing.T) {
 				"request_model": "gpt-4o",
 			},
 			wantCost:  true,
-			wantExact: util.ToPtr(12.5),
+			wantExact: new(12.5),
 		},
 		{
 			name: "leaves an existing non-null cost untouched",
@@ -397,7 +393,7 @@ func TestBackfillEstimatedCostInValues(t *testing.T) {
 				"estimated_cost": 42.0,
 			},
 			wantCost:  true,
-			wantExact: util.ToPtr(42.0),
+			wantExact: new(42.0),
 		},
 		{
 			name: "overwrites an explicit null cost",
@@ -408,7 +404,7 @@ func TestBackfillEstimatedCostInValues(t *testing.T) {
 				"estimated_cost": nil,
 			},
 			wantCost:  true,
-			wantExact: util.ToPtr(12.5),
+			wantExact: new(12.5),
 		},
 		{
 			name: "no model means no cost",
@@ -444,6 +440,92 @@ func TestBackfillEstimatedCostInValues(t *testing.T) {
 			require.NotNil(t, cost)
 			if tc.wantExact != nil {
 				assert.Equal(t, *tc.wantExact, *cost)
+			}
+		})
+	}
+}
+
+func TestFindPricingBySegment(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		model     string
+		wantMatch bool
+		// wantPricing, when set, is asserted against the exact pricing entry
+		// that a specific known model key resolves to, verifying which key
+		// matched rather than just that some entry did.
+		wantPricing *ModelPricing
+	}{
+		{
+			name:      "exact match resolves without trimming",
+			model:     "gpt-4o",
+			wantMatch: true,
+			wantPricing: &ModelPricing{
+				InputPerToken:  modelPricing["gpt-4o"].InputPerToken,
+				OutputPerToken: modelPricing["gpt-4o"].OutputPerToken,
+			},
+		},
+		{
+			name:      "one segment trimmed to reach an exact match",
+			model:     "gpt-4-turbo-2024-04-09-preview",
+			wantMatch: true,
+			wantPricing: &ModelPricing{
+				InputPerToken:  modelPricing["gpt-4-turbo-2024-04-09"].InputPerToken,
+				OutputPerToken: modelPricing["gpt-4-turbo-2024-04-09"].OutputPerToken,
+			},
+		},
+		{
+			name:      "multiple segments trimmed to reach an exact match",
+			model:     "gpt-4-turbo-2024-04-09-preview-canary",
+			wantMatch: true,
+			wantPricing: &ModelPricing{
+				InputPerToken:  modelPricing["gpt-4-turbo-2024-04-09"].InputPerToken,
+				OutputPerToken: modelPricing["gpt-4-turbo-2024-04-09"].OutputPerToken,
+			},
+		},
+		{
+			name:      "shares a dash-delimited segment prefix but must not over-match",
+			model:     "gpt-5.7-newmodel",
+			wantMatch: false,
+		},
+		{
+			name:      "trailing segment may itself contain a dot",
+			model:     "gpt-5-mini.preview",
+			wantMatch: true,
+			wantPricing: &ModelPricing{
+				InputPerToken:  modelPricing["gpt-5"].InputPerToken,
+				OutputPerToken: modelPricing["gpt-5"].OutputPerToken,
+			},
+		},
+		{
+			name:      "no dashes and no exact match",
+			model:     "unknownmodel",
+			wantMatch: false,
+		},
+		{
+			name:      "empty string has no match",
+			model:     "",
+			wantMatch: false,
+		},
+	}
+
+	// Sanity-check the fixture assumptions this test relies on, so a failure
+	// here points at a stale embedded snapshot rather than the matching logic.
+	require.Contains(t, modelPricing, "gpt-4o")
+	require.Contains(t, modelPricing, "gpt-4-turbo-2024-04-09")
+	require.Contains(t, modelPricing, "gpt-5")
+	require.NotContains(t, modelPricing, "gpt-5.7-newmodel")
+	require.NotContains(t, modelPricing, "gpt-5.7")
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			pricing, ok := findPricingBySegment(tc.model)
+			require.Equal(t, tc.wantMatch, ok)
+			if tc.wantPricing != nil {
+				assert.Equal(t, *tc.wantPricing, pricing)
 			}
 		})
 	}

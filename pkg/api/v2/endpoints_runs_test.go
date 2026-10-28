@@ -65,6 +65,25 @@ func TestToFunctionRun(t *testing.T) {
 	require.Nil(t, result.Output)
 }
 
+func TestToFunctionRunInfersPausedStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		pausedAt time.Time
+		want     apiv2.FunctionRunStatus
+	}{
+		{name: "active pause", pausedAt: time.Now().Add(-time.Hour), want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED},
+		{name: "future pause", pausedAt: time.Now().Add(time.Hour), want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := toFunctionRun(&cqrs.FunctionRun{
+				Status: enums.RunStatusRunning,
+			}, inngest.DeployedFunction{PausedAt: tc.pausedAt})
+
+			require.Equal(t, tc.want, result.Status)
+		})
+	}
+}
+
 func TestRunCancellability(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -162,19 +181,22 @@ func TestAppRefID(t *testing.T) {
 
 func TestToFunctionRunStatus(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		status enums.RunStatus
-		want   apiv2.FunctionRunStatus
+		name           string
+		status         enums.RunStatus
+		functionPaused bool
+		want           apiv2.FunctionRunStatus
 	}{
 		{name: "completed", status: enums.RunStatusCompleted, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED},
 		{name: "failed", status: enums.RunStatusFailed, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_FAILED},
 		{name: "cancelled", status: enums.RunStatusCancelled, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_CANCELLED},
 		{name: "running", status: enums.RunStatusRunning, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING},
+		{name: "paused", status: enums.RunStatusRunning, functionPaused: true, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED},
+		{name: "skipped", status: enums.RunStatusSkipped, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_SKIPPED},
 		{name: "scheduled", status: enums.RunStatusScheduled, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED},
-		{name: "unknown", status: enums.RunStatusUnknown, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED},
+		{name: "unknown", status: enums.RunStatusUnknown, want: apiv2.FunctionRunStatus_FUNCTION_RUN_STATUS_UNKNOWN},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, toFunctionRunStatus(tc.status))
+			require.Equal(t, tc.want, toFunctionRunStatus(tc.status, tc.functionPaused))
 		})
 	}
 }
@@ -215,7 +237,7 @@ func TestJSONToStruct(t *testing.T) {
 }
 
 func TestOptionalString(t *testing.T) {
-	value := optionalString("value")
+	value := new("value")
 
 	require.NotNil(t, value)
 	require.Equal(t, "value", *value)
@@ -259,8 +281,8 @@ func TestToFunctionTraceReturnsConvertError(t *testing.T) {
 		},
 		RunID: runID,
 		Attributes: &meta.ExtractedValues{
-			IsUserland:   boolPtr(true),
-			UserlandName: strPtr("userland"),
+			IsUserland:   new(true),
+			UserlandName: new("userland"),
 		},
 	}, false)
 
@@ -299,6 +321,7 @@ func TestToTraceSpan(t *testing.T) {
 		EndedAt:   &endedAt,
 		StepOp:    &stepOp,
 		StepID:    &stepID,
+		StepType:  "RUN",
 		Metadata: []*models.SpanMetadata{
 			nil,
 			{
@@ -310,10 +333,13 @@ func TestToTraceSpan(t *testing.T) {
 		},
 		ChildrenSpans: []*models.RunTraceSpan{
 			{
-				SpanID:   "child",
-				Name:     "Child",
-				Status:   models.RunTraceSpanStatusRunning,
-				QueuedAt: startedAt,
+				SpanID:    "child",
+				Name:      "Child",
+				Status:    models.RunTraceSpanStatusRunning,
+				QueuedAt:  startedAt,
+				StepType:  "SPAN_GROUP",
+				GroupKind: new("job"),
+				Origin:    new("@inngest/ci@0.1.0"),
 			},
 		},
 	}, true)
@@ -324,6 +350,7 @@ func TestToTraceSpan(t *testing.T) {
 	require.Equal(t, apiv2.TraceSpanStatus_TRACE_SPAN_STATUS_COMPLETED, result.Status)
 	require.Equal(t, apiv2.TraceStepOp_TRACE_STEP_OP_RUN, *result.StepOp)
 	require.Equal(t, stepID, *result.StepId)
+	require.Equal(t, "RUN", *result.StepType)
 	require.Equal(t, uint64(123), *result.DurationMs)
 	require.Equal(t, startedAt.Add(-time.Second), result.QueuedAt.AsTime())
 	require.Equal(t, startedAt, result.StartedAt.AsTime())
@@ -337,6 +364,11 @@ func TestToTraceSpan(t *testing.T) {
 	require.Equal(t, updatedAt, result.Metadata[0].UpdatedAt.AsTime())
 	require.Len(t, result.Children, 1)
 	require.Equal(t, "child", result.Children[0].Id)
+	require.Equal(t, "SPAN_GROUP", *result.Children[0].StepType)
+	require.Equal(t, "job", *result.Children[0].GroupKind)
+	require.Nil(t, result.GroupKind)
+	require.Equal(t, "@inngest/ci@0.1.0", *result.Children[0].Origin)
+	require.Nil(t, result.Origin)
 }
 
 func TestToTraceSpanOmitsOutputWithoutOutputID(t *testing.T) {
@@ -350,6 +382,7 @@ func TestToTraceSpanOmitsOutputWithoutOutputID(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, result.Input)
 	require.Nil(t, result.Output)
+	require.Nil(t, result.StepType)
 }
 
 func TestToTraceSpanPropagatesOutputErrors(t *testing.T) {
@@ -403,6 +436,7 @@ func TestToTraceSpanMetadata(t *testing.T) {
 		{
 			Scope:     enums.MetadataScopeRun,
 			Kind:      tracemetadata.Kind("userland.custom"),
+			IsUser:    true,
 			Values:    tracemetadata.Values{"key": json.RawMessage(`"value"`)},
 			UpdatedAt: updatedAt,
 		},
@@ -411,6 +445,7 @@ func TestToTraceSpanMetadata(t *testing.T) {
 	require.Len(t, result, 1)
 	require.Equal(t, "run", result[0].Scope)
 	require.Equal(t, "userland.custom", result[0].Kind)
+	require.True(t, result[0].IsUser)
 	require.Equal(t, map[string]string{"key": `"value"`}, result[0].Values)
 	require.Equal(t, updatedAt, result[0].UpdatedAt.AsTime())
 	require.Nil(t, toTraceSpanMetadata(nil))

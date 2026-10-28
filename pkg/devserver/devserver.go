@@ -2,8 +2,10 @@ package devserver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -44,6 +46,7 @@ import (
 	"github.com/inngest/inngest/pkg/debugapi"
 	"github.com/inngest/inngest/pkg/deploy"
 	"github.com/inngest/inngest/pkg/devserver/devutil"
+	"github.com/inngest/inngest/pkg/duckdb/query"
 	"github.com/inngest/inngest/pkg/enums"
 	"github.com/inngest/inngest/pkg/event"
 	"github.com/inngest/inngest/pkg/execution"
@@ -124,6 +127,10 @@ type StartOpts struct {
 	// given key.
 	EventKeys []string `json:"-"`
 
+	// CloudSandboxes optionally handles authenticated Cloud compute requests.
+	// Local events, functions, runs, and executor state are never forwarded.
+	CloudSandboxes http.Handler `json:"-"`
+
 	// RequireKeys defines whether event and signing keys are required for the
 	// server to function. If this is true and signing keys are not defined,
 	// the server will still boot but core actions such as syncing, runs, and
@@ -153,8 +160,38 @@ type StartOpts struct {
 	// SQLiteDir specifies where SQLite files should be stored
 	SQLiteDir string `json:"sqlite_dir"`
 
+	// EnableDuckDB opts into the experimental DuckDB dual-write POC, gated
+	// behind the `--duckdb` flag (or INNGEST_DUCKDB env var) on both
+	// `inngest dev` and `inngest start`. Off by default. Controls writing
+	// only -- see EnableDuckDBReads for reading. Enabling this alone always
+	// dual-writes to an in-memory catalog; writing an on-disk catalog that
+	// outlives the process additionally requires --persist AND the
+	// EXPERIMENTAL_DUCKDB_PERSISTENT_DUALWRITE feature flag (see start()).
+	EnableDuckDB bool `json:"enable_duckdb"`
+
+	// EnableDuckDBReads opts into serving the GQL API and REST trace/run
+	// endpoints from DuckDB once dual-write is up, gated behind the
+	// `--duckdb-reads` flag (or INNGEST_DUCKDB_READS env var). Has no effect
+	// unless EnableDuckDB is also true and dual-write starts successfully --
+	// it exists so writing can be validated (throughput, correctness of the
+	// dual-written data) before any read traffic depends on it. Off by
+	// default, independent of EnableDuckDB's own default.
+	EnableDuckDBReads bool `json:"enable_duckdb_reads"`
+
 	// Debug API
 	DebugAPIPort int `json:"debugAPIPort"`
+
+	// DuckDBClosed, if non-nil, is closed once the DuckDB dual-write
+	// subprocess (see EnableDuckDB) has been fully torn down as part of
+	// start()'s shutdown sequence -- i.e. after service.StartAll has already
+	// stopped every other service, since that call is synchronous and this
+	// signal only fires from start()'s deferred cleanup once it returns. It
+	// is closed immediately, with nothing to wait for, if dual-write was
+	// never enabled or never started successfully. Callers (e.g. cmd/devserver's
+	// signal-triggered exit) can block on this to guarantee they never
+	// terminate the process before dual-write has flushed and closed its
+	// subprocess.
+	DuckDBClosed chan struct{} `json:"-"`
 }
 
 // Create and start a new dev server.  The dev server is used during (surprise surprise)
@@ -183,6 +220,11 @@ func start(ctx context.Context, opts StartOpts) error {
 
 	if opts.Tick == 0 {
 		opts.Tick = DefaultTickDuration
+	}
+
+	enableDuckDBPersistence := os.Getenv("EXPERIMENTAL_DUCKDB_PERSISTENT_DUALWRITE") == "true"
+	if err := validateDuckDBPersistenceFlags(opts.Persist, opts.EnableDuckDB, enableDuckDBPersistence); err != nil {
+		return err
 	}
 
 	var err error
@@ -221,7 +263,7 @@ func start(ctx context.Context, opts StartOpts) error {
 
 	stepLimitOverrides := make(map[string]int)
 	stateSizeLimitOverrides := make(map[string]int)
-	pauseOverrides := make(map[uuid.UUID]bool)
+	pauseState := &functionPauses{}
 
 	var shardedRc, unshardedRc, connectRc, realtimePubRc, realtimeSubRc rueidis.Client
 	var shardedCluster, unshardedCluster, connectCluster, realtimeCluster *miniredis.Miniredis
@@ -328,7 +370,6 @@ func start(ctx context.Context, opts StartOpts) error {
 	// Step metadata is enabled by default in the dev server; set EXPERIMENTAL_STEP_METADATA=false to disable.
 	enableStepMetadata := os.Getenv("EXPERIMENTAL_STEP_METADATA") != "false"
 	enableAsyncDispatchValidation := os.Getenv("EXPERIMENTAL_ASYNC_DISPATCH_VALIDATION") == "true"
-
 	if enableKeyQueues {
 		runMode.ShadowPartition = true
 		runMode.AccountShadowPartition = true
@@ -373,20 +414,15 @@ func start(ctx context.Context, opts StartOpts) error {
 			return enableKeyQueues
 		}),
 		queue.WithBacklogRefillLimit(10),
-		queue.WithPartitionPausedGetter(func(ctx context.Context, functionID uuid.UUID) queue.PartitionPausedInfo {
-			if paused, ok := pauseOverrides[functionID]; ok && paused {
-				return queue.PartitionPausedInfo{
-					Stale:  false,
-					Paused: true,
-				}
-			}
-			return queue.PartitionPausedInfo{}
-		}),
+		queue.WithPartitionPausedGetter(pauseState.partitionPaused),
 		queue.WithConditionalTracer(conditionalQueueTracer),
 		queue.WithCapacityManager(cm),
 		queue.WithAcquireCapacityLeaseOnBacklogRefill(true),
 		queue.WithCapacityManager(cm),
 		queue.WithAcquireCapacityLeaseOnBacklogRefill(true),
+		queue.WithCapacityReleaseWakeEnabled(func(context.Context, uuid.UUID) bool {
+			return true
+		}),
 	}
 
 	services = append(services, constraintapi.NewLeaseScavengerService(cm, consts.ConstraintAPIScavengerTick))
@@ -407,6 +443,7 @@ func start(ctx context.Context, opts StartOpts) error {
 	if err != nil {
 		return fmt.Errorf("could not create queue: %w", err)
 	}
+	functionProvider := NewFunctionProvider(dbcqrs, pauseState, rq)
 
 	rl := ratelimit.New(ctx, unshardedRc, "{ratelimit}:")
 
@@ -459,6 +496,11 @@ func start(ctx context.Context, opts StartOpts) error {
 	// automatically transform dev requests to lambda invocations.
 	//
 	// We also make sure to allow local requests.
+	url := opts.Config.CoreAPI.Addr
+	if url == "0.0.0.0" {
+		url = "127.0.0.1"
+	}
+	publishURL := fmt.Sprintf("http://%s:%d/v1/realtime/publish", url, opts.Config.CoreAPI.Port)
 	httpClient := exechttp.Client(
 		exechttp.SecureDialerOpts{
 			AllowHostDocker: true, // In local dev, this is OK
@@ -467,7 +509,7 @@ func start(ctx context.Context, opts StartOpts) error {
 		},
 		// Enable publishing of any requests made directly from the dev server.  Note that this
 		// is different from the cloud.
-		exechttp.WithRealtimePublishing(),
+		exechttp.WithDevServerRealtimePublishing(publishURL),
 	)
 
 	httpClient.Client.Transport = awsgateway.NewTransformTripper(httpClient.Client.Transport)
@@ -494,9 +536,67 @@ func start(ctx context.Context, opts StartOpts) error {
 
 	tp := tracing.NewSqlcTracerProvider(adapter.Q())
 
-	url := opts.Config.CoreAPI.Addr
-	if url == "0.0.0.0" {
-		url = "127.0.0.1"
+	// Opt-in, best-effort DuckDB dual-write: nil unless opts.EnableDuckDB is
+	// true (the `--duckdb` flag / INNGEST_DUCKDB env var), and nil on any
+	// failure (missing binary, failed spawn, failed migration), in which
+	// case the rest of devserver startup proceeds unaffected. When non-nil,
+	// stopDualWrite tears down its background goroutines and the duckdb
+	// subprocess when start() returns (i.e. once service.StartAll below has
+	// finished shutting every other service down).
+	var (
+		syncListeners []execution.SyncLifecycleListener
+		// gqlData is the GQL resolver's data source, and also the trace/run
+		// read path for REST (apiv1's TraceReader, apiv2's Runs/
+		// FunctionTraces providers). It stays the primary (SQLite/
+		// Postgres-backed) manager unless dual-write starts successfully AND
+		// opts.EnableDuckDBReads is set, in which case it's wrapped to also
+		// read runs/events/run-trace data from DuckDB. EnableDuckDBReads is
+		// deliberately separate from EnableDuckDB: dual-write (writing) can
+		// run alone to validate throughput/correctness before any read
+		// traffic depends on it. The executor, runner, queue, and REST's
+		// apps/functions/event-write paths keep using dbcqrs/ds.Data
+		// directly regardless — DuckDB has no apps/functions tables and
+		// dual-write only covers reads.
+		gqlData = dbcqrs
+		// dwDB is the raw DuckDB connection dual-write writes through —
+		// nil unless dual-write started successfully (opts.EnableDuckDB),
+		// same gate as gqlData's query.Wrap. Threaded into
+		// coreapi.Options below so insights can execute
+		// against it directly, independently of whether
+		// EnableDuckDBReads (which only affects gqlData) is also set.
+		dwDB *sql.DB
+	)
+	// opts.Persist alone (--persist) is not enough to write an on-disk DuckLake
+	// catalog: that also requires enableDuckDBPersistence
+	// (EXPERIMENTAL_DUCKDB_PERSISTENT_DUALWRITE), so --duckdb without that env
+	// var still dual-writes, just against an in-memory catalog. opts.PostgresURI
+	// is only honored alongside those same two gates (see duckLakeOptionsFor):
+	// a persisted DuckLake catalog reuses the same Postgres database as its
+	// catalog store when one is already configured, instead of a local file.
+	if dwListener, db := setupDualWrite(ctx, opts.EnableDuckDB, opts.Persist && enableDuckDBPersistence, "", opts.SQLiteDir, opts.PostgresURI); dwListener != nil {
+		dwDB = db
+		l.Info("dual-write enabled: syncing executions to DuckDB subprocess")
+		syncListeners = append(syncListeners, dwListener)
+		if opts.EnableDuckDBReads {
+			l.Info("dual-write reads enabled: serving GQL/REST trace and run data from DuckDB")
+			gqlData = query.Wrap(dbcqrs, db)
+		}
+		defer func() {
+			// Bounded like every other service.Service's Stop (see
+			// pkg/service's defaultTimeout/stopTimeout, 30s) -- Close must
+			// never hang start()'s return indefinitely if a batcher flush
+			// wedges on an unresponsive subprocess.
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			stopDualWrite(shutdownCtx, dwListener)
+			if opts.DuckDBClosed != nil {
+				close(opts.DuckDBClosed)
+			}
+		}()
+	} else if opts.DuckDBClosed != nil {
+		// Dual-write was never enabled or never started; nothing for a
+		// caller waiting on DuckDBClosed to wait for.
+		close(opts.DuckDBClosed)
 	}
 
 	executorOpts := []executor.ExecutorOpt{
@@ -533,6 +633,7 @@ func start(ctx context.Context, opts StartOpts) error {
 			}, metrics.NewLifecycleListeners()...)...,
 		),
 		executor.WithEventLifecycleListeners(execution.NoopEventLifecycleListener{}),
+		executor.WithSyncLifecycleListeners(syncListeners...),
 		executor.WithStepLimits(func(id sv2.ID) int {
 			if override, hasOverride := stepLimitOverrides[id.FunctionID.String()]; hasOverride {
 				l.Warn("using step limit override", "override", override, "fn_id", id.FunctionID)
@@ -558,13 +659,10 @@ func start(ctx context.Context, opts StartOpts) error {
 		executor.WithTraceReader(dbcqrs),
 		executor.WithRealtimeConfig(executor.ExecutorRealtimeConfig{
 			Secret:     consts.DevServerRealtimeJWTSecret,
-			PublishURL: fmt.Sprintf("http://%s:%d/v1/realtime/publish", url, opts.Config.CoreAPI.Port),
+			PublishURL: publishURL,
 		}),
 		executor.WithTracerProvider(tp),
 
-		executor.WithAllowStepMetadata(func(ctx context.Context, acctID uuid.UUID) bool {
-			return enableStepMetadata
-		}),
 		executor.WithCapacityManager(cm),
 		executor.WithSemaphoreManager(semaphores),
 		executor.WithUseConstraintAPI(func(ctx context.Context, accountID uuid.UUID) (enable bool) {
@@ -606,10 +704,15 @@ func start(ctx context.Context, opts StartOpts) error {
 		runner.WithCronManager(croner),
 		runner.WithPublisher(pb),
 		runner.WithLogger(l),
+		runner.WithSyncLifecycleListeners(syncListeners...),
 	)
 
 	// The devserver embeds the event API.
 	ds := NewService(opts, runner, dbcqrs, pb, stepLimitOverrides, stateSizeLimitOverrides, unshardedRc, hd, nil)
+	// Same dwDB dual-write succeeded/failed against as coreapi.Options.DuckDB
+	// below -- lets devapi.Info report the "duckdb-insights" feature flag
+	// accurately (nil here means insights would error).
+	ds.DuckDB = dwDB
 	ds.State = sm
 	ds.Executor = exec
 	ds.SemaphoreManager = semaphores
@@ -621,7 +724,8 @@ func start(ctx context.Context, opts StartOpts) error {
 
 	core, err := coreapi.NewCoreApi(coreapi.Options{
 		AuthMiddleware: authn.SigningKeyMiddleware(opts.SigningKey),
-		Data:           ds.Data,
+		Data:           gqlData,
+		DuckDB:         dwDB,
 		Config:         ds.Opts.Config,
 		Logger:         l,
 		Runner:         ds.Runner,
@@ -658,25 +762,26 @@ func start(ctx context.Context, opts StartOpts) error {
 			CachingMiddleware: caching,
 			FunctionReader:    ds.Data,
 			Executor:          ds.Executor,
-			Queue:             rq,
+			QueueProducer:     rq,
+			RunQueueReader:    rq,
+			QueueItemReader:   rq,
+			AttemptResetter:   rq,
 			QueueShards:       shardRegistry,
 			Broadcaster:       broadcaster,
-			TraceReader:       ds.Data,
+			TraceReader:       gqlData,
 
-			AppCreator:        dbcqrs,
-			FunctionCreator:   dbcqrs,
-			EventPublisher:    runner,
-			TracerProvider:    tp,
-			State:             smv2,
-			RealtimeJWTSecret: consts.DevServerRealtimeJWTSecret,
+			AppCreator:             dbcqrs,
+			FunctionCreator:        dbcqrs,
+			EventPublisher:         runner,
+			TracerProvider:         tp,
+			SyncLifecycleListeners: syncListeners,
+			State:                  smv2,
+			RealtimeJWTSecret:      consts.DevServerRealtimeJWTSecret,
 
 			CheckpointOpts: apiv1.CheckpointAPIOpts{
-				RunOutputReader: devutil.NewLocalOutputReader(core.Resolver(), ds.Data, ds.Data),
+				RunOutputReader: devutil.NewLocalOutputReader(core.Resolver(), gqlData, gqlData),
 				RunJWTSecret:    consts.DevServerRunJWTSecret,
 				BackoffFunc:     retryBackoff,
-				AllowStepMetadata: func(ctx context.Context, acctID uuid.UUID) bool {
-					return enableStepMetadata
-				},
 				AllowAsyncDispatchValidation: func(ctx context.Context, acctID uuid.UUID) bool {
 					return enableAsyncDispatchValidation
 				},
@@ -719,11 +824,21 @@ func start(ctx context.Context, opts StartOpts) error {
 		SigningKeysProvider: apiv2.NewSigningKeysProvider(opts.SigningKey),
 		EventKeysProvider:   apiv2.NewEventKeysProvider(opts.EventKeys),
 		Apps:                NewAppProvider(dbcqrs),
-		Functions:           NewFunctionProvider(dbcqrs),
-		Runs:                NewRunProvider(dbcqrs, exec),
-		FunctionTraces:      NewFunctionTraceReader(dbcqrs),
-		Executor:            exec,
-		EventPublisher:      runner,
+		Functions:           functionProvider,
+		FunctionPauser:      functionProvider,
+		Runs:                NewRunProvider(gqlData, exec),
+		Replays: NewReplayProvider(dbcqrs, functionProvider, exec, func(id uuid.UUID) bool {
+			return !functionProvider.pauses.get(id).IsZero()
+		}),
+		FunctionTraces: NewFunctionTraceReader(gqlData),
+		Executor:       exec,
+		EventPublisher: runner,
+		// Same dwDB dual-write succeeded/failed against as coreapi.Options.DuckDB
+		// above -- nil means QueryInsights errors clearly instead of resolving empty.
+		DuckDB: dwDB,
+		EventSender: func(ctx context.Context, evt *event.Event) (string, error) {
+			return ds.HandleEvent(ctx, evt, nil)
+		},
 		Scores: apiv2.NewStateScoreProvider(apiv2.StateScoreProviderOptions{
 			State:          smv2,
 			TracerProvider: tp,
@@ -745,7 +860,8 @@ func start(ctx context.Context, opts StartOpts) error {
 		return fmt.Errorf("failed to create v2 handler: %w", err)
 	}
 
-	AddMCPRoute(devAPI, ds.HandleEvent, ds.Data, opts.Tick, apiv2Handler)
+	mcpHandler := newMCPHandler(ds.HandleEvent, ds.Data, opts.Tick, apiv2Handler)
+	addMCPRoute(devAPI, mcpHandler)
 
 	// Create a new data API directly in the devserver.  This allows us to inject
 	// the data API into the dev server port, providing a single router for the dev
@@ -757,10 +873,18 @@ func start(ctx context.Context, opts StartOpts) error {
 	mounts := []api.Mount{
 		{At: "/", Router: devAPI},
 		{At: "/v0", Router: core.Router},
+		{At: "/api/v2/operations", Handler: http.HandlerFunc(mcpHandler.Operations)},
+		{At: "/v2/operations", Handler: http.HandlerFunc(mcpHandler.Operations)},
 		{At: "/api/v2", Handler: apiv2Handler},
 		{At: "/v2", Handler: apiv2Handler},
 		{At: "/debug", Handler: middleware.Profiler()},
 		{At: "/metrics", Router: metricsAPI.Router},
+	}
+
+	if opts.CloudSandboxes != nil {
+		for _, path := range []string{"/dev/cloud", "/v2/sandboxes", "/v2/snapshots", "/api/v2/sandboxes", "/api/v2/snapshots"} {
+			mounts = append(mounts, api.Mount{At: path, Handler: opts.CloudSandboxes})
+		}
 	}
 
 	if testapi.ShouldEnable() {
@@ -784,10 +908,7 @@ func start(ctx context.Context, opts StartOpts) error {
 				}
 			},
 			PauseFunction: func(id uuid.UUID) {
-				pauseOverrides[id] = true
-			},
-			UnpauseFunction: func(id uuid.UUID) {
-				delete(pauseOverrides, id)
+				functionProvider.pauses.pause(id)
 			},
 		})})
 	}
@@ -805,7 +926,10 @@ func start(ctx context.Context, opts StartOpts) error {
 		services = append(services, debugapi.NewDebugAPI(debugapi.Opts{
 			Log:              l,
 			DB:               ds.Data,
-			QueueReader:      rq,
+			RunReader:        rq,
+			ItemReader:       rq,
+			PartitionReader:  rq,
+			BacklogReader:    rq,
 			State:            ds.State,
 			Cron:             croner,
 			ShardRegistry:    shardRegistry,

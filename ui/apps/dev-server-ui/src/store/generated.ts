@@ -47,6 +47,7 @@ export type App = {
   id: Scalars['ID'];
   method: AppMethod;
   name: Scalars['String'];
+  sdkFeatureReadiness: SdkFeatureReadiness;
   sdkLanguage: Scalars['String'];
   sdkVersion: Scalars['String'];
   url: Maybe<Scalars['String']>;
@@ -166,57 +167,10 @@ export type CreateAppInput = {
   url: Scalars['String'];
 };
 
-export type CreateDebugSessionInput = {
-  functionSlug: Scalars['String'];
-  runID?: InputMaybe<Scalars['String']>;
-  workspaceId?: Scalars['ID'];
-};
-
-export type CreateDebugSessionResponse = {
-  __typename?: 'CreateDebugSessionResponse';
-  debugRunID: Scalars['ULID'];
-  debugSessionID: Scalars['ULID'];
-};
-
 export type DebounceConfiguration = {
   __typename?: 'DebounceConfiguration';
   key: Maybe<Scalars['String']>;
   period: Scalars['String'];
-};
-
-export type DebugRun = {
-  __typename?: 'DebugRun';
-  debugTraces: Maybe<Array<RunTraceSpan>>;
-};
-
-export type DebugRunQuery = {
-  debugRunID?: InputMaybe<Scalars['String']>;
-  functionSlug: Scalars['String'];
-  runID?: InputMaybe<Scalars['String']>;
-  workspaceId?: Scalars['ID'];
-};
-
-export type DebugSession = {
-  __typename?: 'DebugSession';
-  debugRuns: Maybe<Array<DebugSessionRun>>;
-};
-
-export type DebugSessionQuery = {
-  debugSessionID?: InputMaybe<Scalars['String']>;
-  functionSlug: Scalars['String'];
-  runID?: InputMaybe<Scalars['String']>;
-  workspaceId?: Scalars['ID'];
-};
-
-export type DebugSessionRun = {
-  __typename?: 'DebugSessionRun';
-  debugRunID: Maybe<Scalars['ULID']>;
-  endedAt: Maybe<Scalars['Time']>;
-  queuedAt: Scalars['Time'];
-  startedAt: Maybe<Scalars['Time']>;
-  status: RunTraceSpanStatus;
-  tags: Maybe<Array<Scalars['String']>>;
-  versions: Maybe<Array<Scalars['String']>>;
 };
 
 export type Event = {
@@ -425,11 +379,6 @@ export type FunctionRunV2 = {
   triggerIDs: Array<Scalars['ULID']>;
 };
 
-
-export type FunctionRunV2TraceArgs = {
-  preview: InputMaybe<Scalars['Boolean']>;
-};
-
 export type FunctionRunV2Edge = {
   __typename?: 'FunctionRunV2Edge';
   cursor: Scalars['String'];
@@ -494,6 +443,78 @@ export enum HistoryType {
   StepWaiting = 'StepWaiting'
 }
 
+export enum InsightsColumnHint {
+  AppId = 'APP_ID',
+  EventId = 'EVENT_ID',
+  FunctionId = 'FUNCTION_ID',
+  RunId = 'RUN_ID',
+  Session = 'SESSION'
+}
+
+export enum InsightsColumnType {
+  Boolean = 'BOOLEAN',
+  Datetime = 'DATETIME',
+  Json = 'JSON',
+  Number = 'NUMBER',
+  String = 'STRING',
+  Unknown = 'UNKNOWN'
+}
+
+export type InsightsDiagnostic = {
+  __typename?: 'InsightsDiagnostic';
+  code: Scalars['String'];
+  end: InsightsDiagnosticPosition;
+  message: Scalars['String'];
+  severity: InsightsDiagnosticSeverity;
+  start: InsightsDiagnosticPosition;
+};
+
+export type InsightsDiagnosticPosition = {
+  __typename?: 'InsightsDiagnosticPosition';
+  column: Scalars['Int'];
+  line: Scalars['Int'];
+};
+
+export enum InsightsDiagnosticSeverity {
+  Error = 'ERROR',
+  Info = 'INFO',
+  Warning = 'WARNING'
+}
+
+export type InsightsPathHint = {
+  __typename?: 'InsightsPathHint';
+  hint: InsightsColumnHint;
+  path: Array<InsightsPathSegment>;
+};
+
+export type InsightsPathSegment = {
+  __typename?: 'InsightsPathSegment';
+  key: Maybe<Scalars['String']>;
+  wildcard: Scalars['Boolean'];
+};
+
+export type InsightsQueryColumn = {
+  __typename?: 'InsightsQueryColumn';
+  name: Scalars['String'];
+  pathHints: Array<InsightsPathHint>;
+  type: InsightsColumnType;
+};
+
+export type InsightsQueryInfo = {
+  __typename?: 'InsightsQueryInfo';
+  limited: Scalars['Boolean'];
+  primaryTable: Maybe<Scalars['String']>;
+  tables: Array<Scalars['String']>;
+};
+
+export type InsightsQueryResult = {
+  __typename?: 'InsightsQueryResult';
+  columns: Array<InsightsQueryColumn>;
+  diagnostics: Array<InsightsDiagnostic>;
+  info: InsightsQueryInfo;
+  rows: Array<Array<Maybe<Scalars['Unknown']>>>;
+};
+
 export type InvokeStepInfo = {
   __typename?: 'InvokeStepInfo';
   functionID: Scalars['String'];
@@ -508,7 +529,6 @@ export type Mutation = {
   __typename?: 'Mutation';
   cancelRun: FunctionRun;
   createApp: App;
-  createDebugSession: CreateDebugSessionResponse;
   deleteApp: Scalars['String'];
   deleteAppByName: Scalars['Boolean'];
   invokeFunction: Maybe<Scalars['Boolean']>;
@@ -524,11 +544,6 @@ export type MutationCancelRunArgs = {
 
 export type MutationCreateAppArgs = {
   input: CreateAppInput;
-};
-
-
-export type MutationCreateDebugSessionArgs = {
-  input: CreateDebugSessionInput;
 };
 
 
@@ -581,8 +596,6 @@ export type Query = {
   __typename?: 'Query';
   app: Maybe<App>;
   apps: Array<App>;
-  debugRun: Maybe<DebugRun>;
-  debugSession: Maybe<DebugSession>;
   event: Maybe<Event>;
   eventV2: EventV2;
   events: Maybe<Array<Event>>;
@@ -590,11 +603,15 @@ export type Query = {
   functionBySlug: Maybe<Function>;
   functionRun: Maybe<FunctionRun>;
   functions: Maybe<Array<Function>>;
+  insights: InsightsQueryResult;
   run: Maybe<FunctionRunV2>;
   runTrace: RunTraceSpan;
   runTraceSpanOutputByID: RunTraceSpanOutput;
   runTrigger: RunTraceTrigger;
   runs: RunsV2Connection;
+  sessionKeys: Array<SessionKey>;
+  sessionRuns: Array<SessionRun>;
+  sessions: Array<SessionGroup>;
   stream: Array<StreamItem>;
   workerConnection: Maybe<ConnectV1WorkerConnection>;
   workerConnections: ConnectV1WorkerConnectionsConnection;
@@ -608,16 +625,6 @@ export type QueryAppArgs = {
 
 export type QueryAppsArgs = {
   filter: InputMaybe<AppsFilterV1>;
-};
-
-
-export type QueryDebugRunArgs = {
-  query: DebugRunQuery;
-};
-
-
-export type QueryDebugSessionArgs = {
-  query: DebugSessionQuery;
 };
 
 
@@ -653,6 +660,11 @@ export type QueryFunctionRunArgs = {
 };
 
 
+export type QueryInsightsArgs = {
+  sql: Scalars['String'];
+};
+
+
 export type QueryRunArgs = {
   runID: Scalars['String'];
 };
@@ -678,7 +690,25 @@ export type QueryRunsArgs = {
   filter: RunsFilterV2;
   first?: Scalars['Int'];
   orderBy: Array<RunsV2OrderBy>;
-  preview: InputMaybe<Scalars['Boolean']>;
+};
+
+
+export type QuerySessionKeysArgs = {
+  search: InputMaybe<Scalars['String']>;
+};
+
+
+export type QuerySessionRunsArgs = {
+  sessionId: Scalars['String'];
+  sessionKey: Scalars['String'];
+  timeRange: InputMaybe<TimeRangeInput>;
+};
+
+
+export type QuerySessionsArgs = {
+  sessionIdSearch: InputMaybe<Scalars['String']>;
+  sessionKey: Scalars['String'];
+  timeRange: InputMaybe<TimeRangeInput>;
 };
 
 
@@ -824,11 +854,21 @@ export type RunStepInfo = {
   type: Maybe<Scalars['String']>;
 };
 
+export type RunTraceConcurrencyKey = {
+  __typename?: 'RunTraceConcurrencyKey';
+  expression: Scalars['String'];
+  expressionTruncated: Scalars['Boolean'];
+  scope: Scalars['String'];
+  value: Scalars['String'];
+  valueTruncated: Scalars['Boolean'];
+};
+
 export type RunTraceSpan = {
   __typename?: 'RunTraceSpan';
   appID: Scalars['UUID'];
   attempts: Maybe<Scalars['Int']>;
   childrenSpans: Array<RunTraceSpan>;
+  customConcurrencyKeys: Array<RunTraceConcurrencyKey>;
   debugPaused: Scalars['Boolean'];
   debugRunID: Maybe<Scalars['ULID']>;
   debugSessionID: Maybe<Scalars['ULID']>;
@@ -836,10 +876,12 @@ export type RunTraceSpan = {
   endedAt: Maybe<Scalars['Time']>;
   functionID: Scalars['UUID'];
   groupID: Maybe<Scalars['String']>;
+  groupKind: Maybe<Scalars['String']>;
   isRoot: Scalars['Boolean'];
   isUserland: Scalars['Boolean'];
   metadata: Array<SpanMetadata>;
   name: Scalars['String'];
+  origin: Maybe<Scalars['String']>;
   outputID: Maybe<Scalars['String']>;
   parentSpan: Maybe<RunTraceSpan>;
   parentSpanID: Maybe<Scalars['String']>;
@@ -918,11 +960,6 @@ export type RunsV2Connection = {
   totalCount: Scalars['Int'];
 };
 
-
-export type RunsV2ConnectionTotalCountArgs = {
-  preview: InputMaybe<Scalars['Boolean']>;
-};
-
 export type RunsV2OrderBy = {
   direction: RunsOrderByDirection;
   field: RunsV2OrderByField;
@@ -933,6 +970,52 @@ export enum RunsV2OrderByField {
   QueuedAt = 'QUEUED_AT',
   StartedAt = 'STARTED_AT'
 }
+
+export type SdkFeatureReadiness = {
+  __typename?: 'SDKFeatureReadiness';
+  aiMetadataExtraction: Maybe<SdkFeatureStatus>;
+  extendedTraces: Maybe<SdkFeatureStatus>;
+};
+
+export type SdkFeatureStatus = {
+  __typename?: 'SDKFeatureStatus';
+  ready: Scalars['Boolean'];
+  reason: Maybe<Scalars['Int']>;
+};
+
+export type SessionFunction = {
+  __typename?: 'SessionFunction';
+  name: Scalars['String'];
+  slug: Scalars['String'];
+};
+
+export type SessionGroup = {
+  __typename?: 'SessionGroup';
+  failedRunCount: Scalars['Int'];
+  failureRate: Scalars['Float'];
+  functions: Array<SessionFunction>;
+  lastActiveAt: Scalars['Time'];
+  runCount: Scalars['Int'];
+  sessionId: Scalars['String'];
+  sessionKey: Scalars['String'];
+};
+
+export type SessionKey = {
+  __typename?: 'SessionKey';
+  createdAt: Scalars['Time'];
+  sessionKey: Scalars['String'];
+};
+
+export type SessionRun = {
+  __typename?: 'SessionRun';
+  endedAt: Maybe<Scalars['Time']>;
+  eventName: Maybe<Scalars['String']>;
+  functionSlug: Scalars['String'];
+  id: Scalars['String'];
+  queuedAt: Scalars['Time'];
+  startedAt: Maybe<Scalars['Time']>;
+  status: Scalars['String'];
+};
 
 export type SingletonConfiguration = {
   __typename?: 'SingletonConfiguration';
@@ -952,6 +1035,8 @@ export type SleepStepInfo = {
 
 export type SpanMetadata = {
   __typename?: 'SpanMetadata';
+  isUser: Scalars['Boolean'];
+  /** The kind, with or without its userland/inngest prefix depending on the trace store; isUser disambiguates. */
   kind: Scalars['SpanMetadataKind'];
   scope: Scalars['SpanMetadataScope'];
   updatedAt: Scalars['Time'];
@@ -1035,6 +1120,11 @@ export type ThrottleConfiguration = {
   period: Scalars['String'];
 };
 
+export type TimeRangeInput = {
+  from: Scalars['Time'];
+  until?: InputMaybe<Scalars['Time']>;
+};
+
 export type UpdateAppInput = {
   id: Scalars['String'];
   url: Scalars['String'];
@@ -1096,14 +1186,14 @@ export type GetFunctionQuery = { __typename?: 'Query', functionBySlug: { __typen
 export type GetAppsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetAppsQuery = { __typename?: 'Query', apps: Array<{ __typename?: 'App', id: string, name: string, appVersion: string | null, sdkLanguage: string, sdkVersion: string, framework: string | null, url: string | null, error: string | null, connected: boolean, functionCount: number, autodiscovered: boolean, method: AppMethod, functions: Array<{ __typename?: 'Function', name: string, id: string, concurrency: number, config: string, slug: string, url: string }> }> };
+export type GetAppsQuery = { __typename?: 'Query', apps: Array<{ __typename?: 'App', id: string, name: string, appVersion: string | null, sdkLanguage: string, sdkVersion: string, framework: string | null, url: string | null, error: string | null, connected: boolean, functionCount: number, autodiscovered: boolean, method: AppMethod, sdkFeatureReadiness: { __typename?: 'SDKFeatureReadiness', aiMetadataExtraction: { __typename?: 'SDKFeatureStatus', ready: boolean, reason: number | null } | null, extendedTraces: { __typename?: 'SDKFeatureStatus', ready: boolean, reason: number | null } | null }, functions: Array<{ __typename?: 'Function', name: string, id: string, concurrency: number, config: string, slug: string, url: string }> }> };
 
 export type GetAppQueryVariables = Exact<{
   id: Scalars['UUID'];
 }>;
 
 
-export type GetAppQuery = { __typename?: 'Query', app: { __typename?: 'App', id: string, name: string, appVersion: string | null, sdkLanguage: string, sdkVersion: string, framework: string | null, url: string | null, error: string | null, connected: boolean, functionCount: number, autodiscovered: boolean, method: AppMethod, functions: Array<{ __typename?: 'Function', name: string, id: string, concurrency: number, config: string, slug: string, url: string, triggers: Array<{ __typename?: 'FunctionTrigger', type: FunctionTriggerTypes, value: string }> | null }> } | null };
+export type GetAppQuery = { __typename?: 'Query', app: { __typename?: 'App', id: string, name: string, appVersion: string | null, sdkLanguage: string, sdkVersion: string, framework: string | null, url: string | null, error: string | null, connected: boolean, functionCount: number, autodiscovered: boolean, method: AppMethod, sdkFeatureReadiness: { __typename?: 'SDKFeatureReadiness', aiMetadataExtraction: { __typename?: 'SDKFeatureStatus', ready: boolean, reason: number | null } | null, extendedTraces: { __typename?: 'SDKFeatureStatus', ready: boolean, reason: number | null } | null }, functions: Array<{ __typename?: 'Function', name: string, id: string, concurrency: number, config: string, slug: string, url: string, triggers: Array<{ __typename?: 'FunctionTrigger', type: FunctionTriggerTypes, value: string }> | null }> } | null };
 
 export type CreateAppMutationVariables = Exact<{
   input: CreateAppInput;
@@ -1171,33 +1261,30 @@ export type GetRunsQueryVariables = Exact<{
   timeField: RunsV2OrderByField;
   functionRunCursor?: InputMaybe<Scalars['String']>;
   celQuery?: InputMaybe<Scalars['String']>;
-  preview?: InputMaybe<Scalars['Boolean']>;
   isDeferred?: InputMaybe<Scalars['Boolean']>;
 }>;
 
 
-export type GetRunsQuery = { __typename?: 'Query', runs: { __typename?: 'RunsV2Connection', edges: Array<{ __typename?: 'FunctionRunV2Edge', node: { __typename?: 'FunctionRunV2', cronSchedule: string | null, eventName: string | null, id: any, isBatch: boolean, queuedAt: any, endedAt: any | null, startedAt: any | null, status: FunctionRunStatus, hasAI: boolean, isDeferred: boolean, app: { __typename?: 'App', externalID: string, name: string }, function: { __typename?: 'Function', name: string, slug: string }, deferredFrom: Array<{ __typename?: 'RunDeferredFrom', runID: any, function: { __typename?: 'Function', name: string, slug: string } }> } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor: string | null, endCursor: string | null } } };
+export type GetRunsQuery = { __typename?: 'Query', runs: { __typename?: 'RunsV2Connection', edges: Array<{ __typename?: 'FunctionRunV2Edge', node: { __typename?: 'FunctionRunV2', cronSchedule: string | null, eventName: string | null, id: any, isBatch: boolean, queuedAt: any, endedAt: any | null, startedAt: any | null, status: FunctionRunStatus, isDeferred: boolean, app: { __typename?: 'App', externalID: string, name: string }, function: { __typename?: 'Function', name: string, slug: string }, deferredFrom: Array<{ __typename?: 'RunDeferredFrom', runID: any, function: { __typename?: 'Function', name: string, slug: string } }> } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor: string | null, endCursor: string | null } } };
 
 export type CountRunsQueryVariables = Exact<{
   startTime: Scalars['Time'];
   status: InputMaybe<Array<FunctionRunStatus> | FunctionRunStatus>;
   timeField: RunsV2OrderByField;
-  preview?: InputMaybe<Scalars['Boolean']>;
   isDeferred?: InputMaybe<Scalars['Boolean']>;
 }>;
 
 
 export type CountRunsQuery = { __typename?: 'Query', runs: { __typename?: 'RunsV2Connection', totalCount: number } };
 
-export type TraceDetailsFragment = { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null };
+export type TraceDetailsFragment = { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null };
 
 export type GetRunQueryVariables = Exact<{
   runID: Scalars['String'];
-  preview: InputMaybe<Scalars['Boolean']>;
 }>;
 
 
-export type GetRunQuery = { __typename?: 'Query', run: { __typename?: 'FunctionRunV2', status: FunctionRunStatus, hasAI: boolean, function: { __typename?: 'Function', id: string, name: string, slug: string, app: { __typename?: 'App', name: string, method: AppMethod } }, trace: { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null } | null } | null };
+export type GetRunQuery = { __typename?: 'Query', run: { __typename?: 'FunctionRunV2', status: FunctionRunStatus, function: { __typename?: 'Function', id: string, name: string, slug: string, app: { __typename?: 'App', name: string, method: AppMethod } }, trace: { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null } | null } | null };
 
 export type GetRunLinkageQueryVariables = Exact<{
   runID: Scalars['String'];
@@ -1211,7 +1298,7 @@ export type GetRunTraceQueryVariables = Exact<{
 }>;
 
 
-export type GetRunTraceQuery = { __typename?: 'Query', runTrace: { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null } };
+export type GetRunTraceQuery = { __typename?: 'Query', runTrace: { __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, groupKind: string | null, origin: string | null, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, isUser: boolean, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null } };
 
 export type GetTraceResultQueryVariables = Exact<{
   traceID: Scalars['String'];
@@ -1282,26 +1369,12 @@ export type GetEventV2RunsQueryVariables = Exact<{
 
 export type GetEventV2RunsQuery = { __typename?: 'Query', eventV2: { __typename?: 'EventV2', name: string, runs: Array<{ __typename?: 'FunctionRunV2', status: FunctionRunStatus, id: any, startedAt: any | null, endedAt: any | null, function: { __typename?: 'Function', name: string, slug: string }, trace: { __typename?: 'RunTraceSpan', skipReason: string | null, skipExistingRunID: string | null } | null }> } };
 
-export type CreateDebugSessionMutationVariables = Exact<{
-  input: CreateDebugSessionInput;
+export type ExecuteInsightsQueryQueryVariables = Exact<{
+  sql: Scalars['String'];
 }>;
 
 
-export type CreateDebugSessionMutation = { __typename?: 'Mutation', createDebugSession: { __typename?: 'CreateDebugSessionResponse', debugSessionID: any, debugRunID: any } };
-
-export type GetDebugRunQueryVariables = Exact<{
-  query: DebugRunQuery;
-}>;
-
-
-export type GetDebugRunQuery = { __typename?: 'Query', debugRun: { __typename?: 'DebugRun', debugTraces: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, childrenSpans: Array<{ __typename?: 'RunTraceSpan', name: string, status: RunTraceSpanStatus, attempts: number | null, queuedAt: any, scheduledAt: any | null, startedAt: any | null, endedAt: any | null, isRoot: boolean, isUserland: boolean, outputID: string | null, groupID: string | null, debugRunID: any | null, debugSessionID: any | null, spanID: string, stepID: string | null, stepOp: StepOp | null, stepType: string, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }>, userlandSpan: { __typename?: 'UserlandSpan', spanName: string | null, spanKind: string | null, serviceName: string | null, scopeName: string | null, scopeVersion: string | null, spanAttrs: any | null, resourceAttrs: any | null } | null, metadata: Array<{ __typename?: 'SpanMetadata', scope: any, kind: any, values: any, updatedAt: any }>, stepInfo: { __typename: 'InvokeStepInfo', triggeringEventID: any, functionID: string, timeout: any, returnEventID: any | null, runID: any | null, timedOut: boolean | null } | { __typename: 'RunStepInfo', type: string | null } | { __typename: 'SleepStepInfo', sleepUntil: any } | { __typename: 'WaitForEventStepInfo', eventName: string, expression: string | null, timeout: any, foundEventID: any | null, timedOut: boolean | null } | { __typename: 'WaitForSignalStepInfo', signal: string, timeout: any, timedOut: boolean | null } | null, response: { __typename?: 'RunTraceSpanResponseInfo', statusCode: number, headers: any } | null }> | null } | null };
-
-export type GetDebugSessionQueryVariables = Exact<{
-  query: DebugSessionQuery;
-}>;
-
-
-export type GetDebugSessionQuery = { __typename?: 'Query', debugSession: { __typename?: 'DebugSession', debugRuns: Array<{ __typename?: 'DebugSessionRun', status: RunTraceSpanStatus, queuedAt: any, startedAt: any | null, endedAt: any | null, debugRunID: any | null, tags: Array<string> | null, versions: Array<string> | null }> | null } | null };
+export type ExecuteInsightsQueryQuery = { __typename?: 'Query', insights: { __typename?: 'InsightsQueryResult', rows: Array<Array<any | null>>, columns: Array<{ __typename?: 'InsightsQueryColumn', name: string, type: InsightsColumnType, pathHints: Array<{ __typename?: 'InsightsPathHint', hint: InsightsColumnHint, path: Array<{ __typename?: 'InsightsPathSegment', key: string | null, wildcard: boolean }> }> }>, info: { __typename?: 'InsightsQueryInfo', primaryTable: string | null, tables: Array<string>, limited: boolean }, diagnostics: Array<{ __typename?: 'InsightsDiagnostic', severity: InsightsDiagnosticSeverity, code: string, message: string, start: { __typename?: 'InsightsDiagnosticPosition', line: number, column: number }, end: { __typename?: 'InsightsDiagnosticPosition', line: number, column: number } }> } };
 
 export const RunDeferSummaryFieldsFragmentDoc = `
     fragment RunDeferSummaryFields on RunDefer {
@@ -1353,6 +1426,8 @@ export const TraceDetailsFragmentDoc = `
   stepID
   stepOp
   stepType
+  groupKind
+  origin
   stepInfo {
     __typename
     ... on InvokeStepInfo {
@@ -1479,6 +1554,7 @@ export const GetFunctionDocument = `
       throttle {
         burst
         key
+    isUser
         limit
         period
       }
@@ -1516,6 +1592,16 @@ export const GetAppsDocument = `
     functionCount
     autodiscovered
     method
+    sdkFeatureReadiness {
+      aiMetadataExtraction {
+        ready
+        reason
+      }
+      extendedTraces {
+        ready
+        reason
+      }
+    }
     functions {
       name
       id
@@ -1542,6 +1628,16 @@ export const GetAppDocument = `
     functionCount
     autodiscovered
     method
+    sdkFeatureReadiness {
+      aiMetadataExtraction {
+        ready
+        reason
+      }
+      extendedTraces {
+        ready
+        reason
+      }
+    }
     functions {
       name
       id
@@ -1612,12 +1708,11 @@ export const RerunFromStepDocument = `
 }
     `;
 export const GetRunsDocument = `
-    query GetRuns($appIDs: [UUID!], $startTime: Time!, $status: [FunctionRunStatus!], $timeField: RunsV2OrderByField!, $functionRunCursor: String = null, $celQuery: String = null, $preview: Boolean = false, $isDeferred: Boolean = null) {
+    query GetRuns($appIDs: [UUID!], $startTime: Time!, $status: [FunctionRunStatus!], $timeField: RunsV2OrderByField!, $functionRunCursor: String = null, $celQuery: String = null, $isDeferred: Boolean = null) {
   runs(
     filter: {appIDs: $appIDs, from: $startTime, status: $status, timeField: $timeField, query: $celQuery, isDeferred: $isDeferred}
     orderBy: [{field: $timeField, direction: DESC}]
     after: $functionRunCursor
-    preview: $preview
   ) {
     edges {
       node {
@@ -1637,7 +1732,6 @@ export const GetRunsDocument = `
         endedAt
         startedAt
         status
-        hasAI
         isDeferred
         deferredFrom {
           runID
@@ -1658,18 +1752,17 @@ export const GetRunsDocument = `
 }
     `;
 export const CountRunsDocument = `
-    query CountRuns($startTime: Time!, $status: [FunctionRunStatus!], $timeField: RunsV2OrderByField!, $preview: Boolean = false, $isDeferred: Boolean = null) {
+    query CountRuns($startTime: Time!, $status: [FunctionRunStatus!], $timeField: RunsV2OrderByField!, $isDeferred: Boolean = null) {
   runs(
     filter: {from: $startTime, status: $status, timeField: $timeField, isDeferred: $isDeferred}
     orderBy: [{field: $timeField, direction: DESC}]
-    preview: $preview
   ) {
-    totalCount(preview: $preview)
+    totalCount
   }
 }
     `;
 export const GetRunDocument = `
-    query GetRun($runID: String!, $preview: Boolean) {
+    query GetRun($runID: String!) {
   run(runID: $runID) {
     function {
       app {
@@ -1681,7 +1774,7 @@ export const GetRunDocument = `
       slug
     }
     status
-    trace(preview: $preview) {
+    trace {
       ...TraceDetails
       childrenSpans {
         ...TraceDetails
@@ -1691,12 +1784,20 @@ export const GetRunDocument = `
             ...TraceDetails
             childrenSpans {
               ...TraceDetails
+              childrenSpans {
+                ...TraceDetails
+                childrenSpans {
+                  ...TraceDetails
+                  childrenSpans {
+                    ...TraceDetails
+                  }
+                }
+              }
             }
           }
         }
       }
     }
-    hasAI
   }
 }
     ${TraceDetailsFragmentDoc}`;
@@ -1893,7 +1994,7 @@ export const GetEventV2RunsDocument = `
         name
         slug
       }
-      trace(preview: true) {
+      trace {
         skipReason
         skipExistingRunID
       }
@@ -1901,43 +2002,38 @@ export const GetEventV2RunsDocument = `
   }
 }
     `;
-export const CreateDebugSessionDocument = `
-    mutation CreateDebugSession($input: CreateDebugSessionInput!) {
-  createDebugSession(input: $input) {
-    debugSessionID
-    debugRunID
-  }
-}
-    `;
-export const GetDebugRunDocument = `
-    query GetDebugRun($query: DebugRunQuery!) {
-  debugRun(query: $query) {
-    debugTraces {
-      ...TraceDetails
-      childrenSpans {
-        ...TraceDetails
-        childrenSpans {
-          ...TraceDetails
-          childrenSpans {
-            ...TraceDetails
-          }
+export const ExecuteInsightsQueryDocument = `
+    query ExecuteInsightsQuery($sql: String!) {
+  insights(sql: $sql) {
+    columns {
+      name
+      type
+      pathHints {
+        path {
+          key
+          wildcard
         }
+        hint
       }
     }
-  }
-}
-    ${TraceDetailsFragmentDoc}`;
-export const GetDebugSessionDocument = `
-    query GetDebugSession($query: DebugSessionQuery!) {
-  debugSession(query: $query) {
-    debugRuns {
-      status
-      queuedAt
-      startedAt
-      endedAt
-      debugRunID
-      tags
-      versions
+    rows
+    info {
+      primaryTable
+      tables
+      limited
+    }
+    diagnostics {
+      start {
+        line
+        column
+      }
+      end {
+        line
+        column
+      }
+      severity
+      code
+      message
     }
   }
 }
@@ -2020,18 +2116,12 @@ const injectedRtkApi = api.injectEndpoints({
     GetEventV2Runs: build.query<GetEventV2RunsQuery, GetEventV2RunsQueryVariables>({
       query: (variables) => ({ document: GetEventV2RunsDocument, variables })
     }),
-    CreateDebugSession: build.mutation<CreateDebugSessionMutation, CreateDebugSessionMutationVariables>({
-      query: (variables) => ({ document: CreateDebugSessionDocument, variables })
-    }),
-    GetDebugRun: build.query<GetDebugRunQuery, GetDebugRunQueryVariables>({
-      query: (variables) => ({ document: GetDebugRunDocument, variables })
-    }),
-    GetDebugSession: build.query<GetDebugSessionQuery, GetDebugSessionQueryVariables>({
-      query: (variables) => ({ document: GetDebugSessionDocument, variables })
+    ExecuteInsightsQuery: build.query<ExecuteInsightsQueryQuery, ExecuteInsightsQueryQueryVariables>({
+      query: (variables) => ({ document: ExecuteInsightsQueryDocument, variables })
     }),
   }),
 });
 
 export { injectedRtkApi as api };
-export const { useGetEventQuery, useLazyGetEventQuery, useGetFunctionsQuery, useLazyGetFunctionsQuery, useGetFunctionQuery, useLazyGetFunctionQuery, useGetAppsQuery, useLazyGetAppsQuery, useGetAppQuery, useLazyGetAppQuery, useCreateAppMutation, useUpdateAppMutation, useDeleteAppMutation, useInvokeFunctionMutation, useCancelRunMutation, useRerunMutation, useRerunFromStepMutation, useGetRunsQuery, useLazyGetRunsQuery, useCountRunsQuery, useLazyCountRunsQuery, useGetRunQuery, useLazyGetRunQuery, useGetRunLinkageQuery, useLazyGetRunLinkageQuery, useGetRunTraceQuery, useLazyGetRunTraceQuery, useGetTraceResultQuery, useLazyGetTraceResultQuery, useGetTriggerQuery, useLazyGetTriggerQuery, useGetWorkerConnectionsQuery, useLazyGetWorkerConnectionsQuery, useCountWorkerConnectionsQuery, useLazyCountWorkerConnectionsQuery, useGetEventsV2Query, useLazyGetEventsV2Query, useGetEventV2Query, useLazyGetEventV2Query, useGetEventV2PayloadQuery, useLazyGetEventV2PayloadQuery, useGetEventV2RunsQuery, useLazyGetEventV2RunsQuery, useCreateDebugSessionMutation, useGetDebugRunQuery, useLazyGetDebugRunQuery, useGetDebugSessionQuery, useLazyGetDebugSessionQuery } = injectedRtkApi;
+export const { useGetEventQuery, useLazyGetEventQuery, useGetFunctionsQuery, useLazyGetFunctionsQuery, useGetFunctionQuery, useLazyGetFunctionQuery, useGetAppsQuery, useLazyGetAppsQuery, useGetAppQuery, useLazyGetAppQuery, useCreateAppMutation, useUpdateAppMutation, useDeleteAppMutation, useInvokeFunctionMutation, useCancelRunMutation, useRerunMutation, useRerunFromStepMutation, useGetRunsQuery, useLazyGetRunsQuery, useCountRunsQuery, useLazyCountRunsQuery, useGetRunQuery, useLazyGetRunQuery, useGetRunLinkageQuery, useLazyGetRunLinkageQuery, useGetRunTraceQuery, useLazyGetRunTraceQuery, useGetTraceResultQuery, useLazyGetTraceResultQuery, useGetTriggerQuery, useLazyGetTriggerQuery, useGetWorkerConnectionsQuery, useLazyGetWorkerConnectionsQuery, useCountWorkerConnectionsQuery, useLazyCountWorkerConnectionsQuery, useGetEventsV2Query, useLazyGetEventsV2Query, useGetEventV2Query, useLazyGetEventV2Query, useGetEventV2PayloadQuery, useLazyGetEventV2PayloadQuery, useGetEventV2RunsQuery, useLazyGetEventV2RunsQuery, useExecuteInsightsQueryQuery, useLazyExecuteInsightsQueryQuery } = injectedRtkApi;
 

@@ -3,7 +3,7 @@ help: ## Print help
 	@grep -E '^[/a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: dev
-dev: docs ## Build dev binary with goreleaser
+dev: ## Build dev binary with goreleaser
 	goreleaser build --single-target --snapshot --clean
 
 .PHONY: run
@@ -47,7 +47,8 @@ gen: ## Run all code generators
 
 .PHONY: protobuf
 protobuf: ## Generate protobuf files
-	buf generate
+	# HttpBody uses the upstream Go package and cannot share the source-relative annotations output directory.
+	buf generate --exclude-path proto/third_party/google/api/httpbody.proto
 	buf generate --path proto/api/v2 --template proto/api/v2/buf.gen.yaml
 	buf generate --path proto/connect/v1 --template proto/connect/v1/buf.gen.yaml
 	buf generate --path proto/debug/v1 --template proto/debug/v1/buf.gen.yaml
@@ -76,8 +77,8 @@ build-ui: ## Build dev server UI
 	cd ui/apps/dev-server-ui && pnpm build
 	cp -r ./ui/apps/dev-server-ui/dist/* ./pkg/devserver/static/
 
-.PHONY: docs
-docs: ## Generate OpenAPI documentation
+.PHONY: openapi
+openapi: ## Generate intermediate OpenAPI specifications
 	@echo "Validating examples JSON structure..."
 	@cd tools/convert-openapi && go test -run TestExamplesJSONStructure -v
 	@echo "Generating protobuf files..."
@@ -86,13 +87,19 @@ docs: ## Generate OpenAPI documentation
 	cd proto && protoc --proto_path=. --proto_path=third_party \
 		--openapiv2_out=../docs/openapi/v2 \
 		--openapiv2_opt=allow_delete_body=true \
+		--openapiv2_opt=enable_field_deprecation=true \
 		--openapiv2_opt=json_names_for_fields=true \
 		api/v2/service.proto
 	@echo "Converting OpenAPI v2 to v3..."
 	go run ./tools/convert-openapi docs/openapi/v2 docs/openapi/v3
 
+.PHONY: docs
+docs: openapi ## Generate public OpenAPI specifications and API docs pages
+	pnpm --dir docs/api-docs install --frozen-lockfile
+	pnpm --dir docs/api-docs generate
+
 .PHONY: build
-build: docs ## Build release binaries
+build: ## Build release binaries
 	goreleaser build
 
 .PHONY: gql
@@ -114,4 +121,4 @@ constraintapi-snapshots: ## Regenerate constraint API Lua snapshots
 clean: ## Remove build artifacts
 	rm -f __debug_bin*
 	rm -rf docs/openapi/v2/*
-	rm -rf docs/openapi/v3/*
+	rm -rf docs/openapi/v3/api/v2/*

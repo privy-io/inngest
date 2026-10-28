@@ -32,6 +32,7 @@ const GetFunctionsUsageDocument = graphql(`
           dailyStarts: usage(opts: { period: "hour", range: "day" }, event: "started") {
             total
             data {
+              slot
               count
             }
           }
@@ -65,10 +66,11 @@ const GetFunctionsDocument = graphql(`
     $page: Int
     $archived: Boolean
     $search: String
+    $appIDs: [UUID!]
     $pageSize: Int
   ) {
     workspace(id: $environmentID) {
-      workflows(archived: $archived, search: $search) @paginated(perPage: $pageSize, page: $page) {
+      workflows(archived: $archived, search: $search, appIDs: $appIDs) @paginated(perPage: $pageSize, page: $page) {
         page {
           page
           perPage
@@ -98,11 +100,13 @@ const GetFunctionsDocument = graphql(`
 export function useFunctionsPage({
   archived,
   search,
+  appIDs,
   envID,
   page,
 }: {
   archived: boolean;
   search: string;
+  appIDs?: string[] | null;
   envID: string;
   page: number;
 }) {
@@ -112,6 +116,7 @@ export function useFunctionsPage({
     variables: {
       archived,
       search,
+      appIDs: appIDs ?? null,
       environmentID: envID,
       page,
       pageSize,
@@ -222,16 +227,19 @@ const GetFunctionDocument = graphql(`
 
 type UseFunctionParams = {
   functionSlug: string;
+  pause?: boolean;
 };
 
 export const useFunction = ({
   functionSlug,
+  pause,
 }: UseFunctionParams): UseQueryResponse<
   GetFunctionQuery,
   { environmentID: string; slug: string }
 > => {
   const environment = useEnvironment();
   const [result, refetch] = useQuery({
+    pause,
     query: GetFunctionDocument,
     variables: {
       environmentID: environment.id,
@@ -246,6 +254,18 @@ const GetFunctionUsageDocument = graphql(`
   query GetFunctionUsage($id: ID!, $environmentID: ID!, $startTime: Time!, $endTime: Time!) {
     workspace(id: $environmentID) {
       workflow(id: $id) {
+        concurrencyLimitReached: metrics(
+          opts: {
+            name: "concurrency_limit_reached_total"
+            from: $startTime
+            to: $endTime
+          }
+        ) {
+          data {
+            bucket
+            value
+          }
+        }
         dailyStarts: usage(opts: { from: $startTime, to: $endTime }, event: "started") {
           period
           total

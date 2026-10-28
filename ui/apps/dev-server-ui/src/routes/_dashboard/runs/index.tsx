@@ -54,11 +54,14 @@ function RunsComponent() {
     'polling-disabled',
     false,
   );
-  const { value: tracesPreviewEnabled, isReady: tracesPreviewFlagReady } =
-    booleanFlag('traces-preview', true, true);
+  // duckdb-backed runs queries support CEL search at any result size, so the
+  // 1000-row search cap below only applies to the (slower) non-duckdb path.
+  const { value: duckdbInsightsEnabled } = booleanFlag(
+    'duckdb-insights',
+    false,
+  );
 
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [preview, setPreview] = useState(false);
 
   const [filterApp] = useStringArraySearchParam('filterApp');
   const [totalCount, setTotalCount] = useState<number>();
@@ -84,10 +87,6 @@ function RunsComponent() {
     }
   }, [pollingDisabled, pollingFlagReady]);
 
-  useEffect(() => {
-    setPreview(tracesPreviewEnabled);
-  }, [tracesPreviewEnabled, tracesPreviewFlagReady]);
-
   const queryFn = useCallback(
     async ({ pageParam }: { pageParam: string | null }) => {
       const data: GetRunsQuery = await client.request(GetRunsDocument, {
@@ -98,7 +97,6 @@ function RunsComponent() {
         status: filteredStatus,
         timeField,
         celQuery: search,
-        preview,
         isDeferred: excludeDeferred ? false : null,
       });
 
@@ -126,7 +124,6 @@ function RunsComponent() {
       calculatedStartTime,
       timeField,
       search,
-      preview,
       excludeDeferred,
     ],
   );
@@ -142,12 +139,10 @@ function RunsComponent() {
           endTime,
           timeField,
           search,
-          preview,
           excludeDeferred,
         },
       ],
       queryFn,
-      enabled: tracesPreviewFlagReady,
       refetchInterval: autoRefresh ? pollInterval : false,
       initialPageParam: null,
       getNextPageParam: (lastPage) => {
@@ -170,7 +165,6 @@ function RunsComponent() {
         status: filteredStatus,
         timeField,
         celQuery: search,
-        preview,
         isDeferred: excludeDeferred ? false : null,
       });
       setTotalCount(data.runs.totalCount);
@@ -181,7 +175,6 @@ function RunsComponent() {
     filteredStatus,
     timeField,
     search,
-    preview,
     excludeDeferred,
   ]);
 
@@ -231,7 +224,7 @@ function RunsComponent() {
             />
             <RunsActionMenu
               setAutoRefresh={() => setAutoRefresh((v) => !v)}
-              setPreview={() => setPreview((p) => !p)}
+              setPreview={() => {}}
               autoRefresh={autoRefresh}
               intervalSeconds={pollInterval / 1000}
             />
@@ -251,7 +244,6 @@ function RunsComponent() {
         ]}
         features={{
           history: Number.MAX_SAFE_INTEGER,
-          tracesPreview: tracesPreviewEnabled,
           isDeferred: true,
         }}
         hasMore={hasNextPage ?? false}
@@ -264,7 +256,7 @@ function RunsComponent() {
         scope="env"
         totalCount={totalCount}
         searchError={searchError}
-        searchLimit={1000}
+        searchLimit={duckdbInsightsEnabled ? undefined : 1000}
         infiniteScrollTrigger={(containerRef) => (
           <InfiniteScrollTrigger
             onIntersect={fetchNextPage}

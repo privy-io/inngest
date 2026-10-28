@@ -8,7 +8,7 @@
  * - Optional expansion to show nested children
  */
 
-import { memo, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useMemo, useState, type CSSProperties, type JSX } from 'react';
 import {
   RiArrowRightFill,
   RiArrowRightLine,
@@ -16,11 +16,13 @@ import {
   RiBuilding2Line,
   RiCheckboxCircleFill,
   RiCloseCircleFill,
+  RiErrorWarningFill,
   RiFlashlightLine,
   RiFlaskLine,
   RiFunctionLine,
   RiInformationLine,
   RiMailLine,
+  RiPercentLine,
   RiSettings3Line,
   RiStopCircleFill,
   RiTimeLine,
@@ -29,6 +31,7 @@ import { format } from 'date-fns';
 
 import { formatVariantWeight } from '../Experiments/format';
 import { HoverCardContent, HoverCardRoot, HoverCardTrigger } from '../HoverCard';
+import { formatScoreValue } from '../RunDetails/ScoresAttrs';
 import { usePathCreator } from '../SharedContext/usePathCreator';
 import { getStatusBackgroundClass, getStatusTextClass } from '../Status/statusClasses';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../Tooltip/Tooltip';
@@ -40,12 +43,14 @@ import type {
   BarSegment,
   BarStyle,
   BarStyleKey,
+  ScoreBadgeData,
   TimelineBarProps,
   TimingDetail,
 } from './TimelineBar.types';
 import { formatDuration } from './runDetailsUtils';
 import { formatLabel } from './utils/formatting';
 import { TIMELINE_CONSTANTS } from './utils/timing';
+import { summarizeWarnings, type StepWarning } from './warnings';
 
 // ============================================================================
 // Style Configurations
@@ -163,6 +168,10 @@ export const BAR_STYLES: Record<BarStyleKey, BarStyle> = {
     barHeight: 'thin',
     pattern: 'dotted',
     labelFormat: 'uppercase',
+    statusBased: true,
+  },
+  'span.group': {
+    barColor: 'bg-status-completed',
     statusBased: true,
   },
   default: {
@@ -478,6 +487,9 @@ function BarHoverCardContent({
   );
 }
 
+const BADGE_CLASS =
+  'bg-canvasSubtle border-subtle text-subtle hover:bg-canvasMuted inline-flex h-5 w-5 items-center justify-center rounded border transition-colors';
+
 /**
  * Experiment badge shown beside a step that ran under an experiment. Renders
  * the flask icon in the standard IconTile treatment (subtle bg + border, thin
@@ -494,9 +506,6 @@ function ExperimentBadge({ metadata }: { metadata?: TimelineBarProps['experiment
         })
       : null;
 
-  const badgeClass =
-    'bg-canvasSubtle border-subtle text-subtle hover:bg-canvasMuted inline-flex h-5 w-5 items-center justify-center rounded border transition-colors';
-
   const badge = <RiFlaskLine className="h-3 w-3" />;
 
   return (
@@ -505,7 +514,7 @@ function ExperimentBadge({ metadata }: { metadata?: TimelineBarProps['experiment
         {href ? (
           <a
             href={href}
-            className={badgeClass}
+            className={BADGE_CLASS}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -513,7 +522,7 @@ function ExperimentBadge({ metadata }: { metadata?: TimelineBarProps['experiment
           </a>
         ) : (
           <span
-            className={badgeClass}
+            className={BADGE_CLASS}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -594,6 +603,90 @@ function ExperimentHoverCardContent({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Score badge shown beside a span that recorded scores. Mirrors the experiment
+ * badge treatment; scores have no dedicated page, so the badge never links out
+ * and clicks fall through to row selection.
+ */
+function ScoreBadge({ scores }: { scores: ScoreBadgeData[] }) {
+  return (
+    <HoverCardRoot openDelay={200} closeDelay={0}>
+      <HoverCardTrigger asChild>
+        <span data-testid="score-badge" className={BADGE_CLASS}>
+          <RiPercentLine className="h-3 w-3" />
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent side="top" align="start" className="border-muted max-w-xs border">
+        <ScoreHoverCardContent scores={scores} />
+      </HoverCardContent>
+    </HoverCardRoot>
+  );
+}
+
+/**
+ * Hover card content for the score badge, listing each recorded score name and
+ * its formatted value.
+ */
+function ScoreHoverCardContent({ scores }: { scores: ScoreBadgeData[] }) {
+  return (
+    <div className="whitespace-nowrap px-1 py-0.5 text-xs">
+      <div className="border-subtle flex justify-between gap-6 border-b pb-1">
+        <span className="text-light">Score</span>
+        <span className="text-light">Value</span>
+      </div>
+      {scores.map((score) => (
+        <div
+          key={score.name}
+          className="border-subtle flex items-center justify-between gap-6 border-b py-1 last:border-b-0"
+        >
+          <span className="text-basis min-w-0 truncate font-medium" title={score.name}>
+            {score.name}
+          </span>
+          <span className="text-basis shrink-0 font-mono tabular-nums">
+            {formatScoreValue(score.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Warning icon shown beside a step name when the step carries warning
+ * metadata. The tooltip lists every message, and a click selects the row like
+ * anywhere else on it, so the details panel shows them too.
+ */
+function WarningIcon({ warnings }: { warnings: StepWarning[] }) {
+  const summary = summarizeWarnings(warnings);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-testid="warning-icon"
+          role="img"
+          aria-label={`Warning: ${summary}`}
+          tabIndex={0}
+          className="focus-visible:ring-primary-subtle ml-1 flex shrink-0 cursor-help rounded-sm focus-visible:outline-none focus-visible:ring"
+        >
+          <RiErrorWarningFill aria-hidden="true" className="text-warning h-3.5 w-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs whitespace-normal text-xs shadow-lg">
+        {warnings.length === 1 ? (
+          summary
+        ) : (
+          <ul className="list-disc space-y-1 pl-4">
+            {warnings.map((warning) => {
+              return <li key={warning.key}>{warning.message}</li>;
+            })}
+          </ul>
+        )}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -781,6 +874,11 @@ export function TimelineBar({
   hasExperiment,
   insideExperiment,
   experimentMetadata,
+  scores,
+  warnings,
+  sandbox,
+  groupKind,
+  dimmed,
 }: TimelineBarProps): JSX.Element {
   const showExperimentBackground = hasExperiment || insideExperiment;
   const barStyle = getBarStyle(style);
@@ -870,10 +968,27 @@ export function TimelineBar({
             <span
               className={cn(
                 'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs font-normal leading-tight',
-                barStyle.textColor ?? 'text-basis',
+                dimmed ? 'text-light' : barStyle.textColor ?? 'text-basis',
                 !effectiveIcon && 'pl-1.5'
               )}
             >
+              {groupKind && (
+                <span
+                  data-testid="group-kind-tag"
+                  className="bg-info text-info mr-1.5 inline-block shrink-0 rounded px-1.5 align-middle font-sans text-[0.66rem] font-semibold uppercase leading-4 tracking-[0.04em]"
+                >
+                  {groupKind}
+                </span>
+              )}
+              {sandbox?.badge && (
+                <span
+                  data-testid="sandbox-badge"
+                  title={sandbox.label}
+                  className="text-light mr-1.5 align-middle font-mono text-[11px]"
+                >
+                  {sandbox.badge}
+                </span>
+              )}
               {displayName}
               {(style === 'timing.inngest' || style === 'timing.server') && (
                 <Tooltip>
@@ -895,6 +1010,8 @@ export function TimelineBar({
               )}
             </span>
 
+            {warnings && warnings.length > 0 && <WarningIcon warnings={warnings} />}
+
             {/* Actions slot */}
             {actions}
           </div>
@@ -903,16 +1020,18 @@ export function TimelineBar({
           <span
             className={cn(
               'shrink-0 text-xs font-medium tabular-nums',
-              barStyle.durationColor ?? barStyle.textColor ?? 'text-basis'
+              dimmed ? 'text-light' : barStyle.durationColor ?? barStyle.textColor ?? 'text-basis'
             )}
           >
             {formatDuration(duration)}
           </span>
         </div>
 
-        {/* Experiment badge - centered between left panel and bars */}
-        <span className="inline-flex w-7 shrink-0 items-center justify-center">
+        {/* Experiment and score badges - centered between left panel and bars.
+            Width is fixed so bars stay aligned across rows regardless of badges. */}
+        <span className="inline-flex w-12 shrink-0 items-center justify-center gap-1">
           {hasExperiment && <ExperimentBadge metadata={experimentMetadata} />}
+          {scores && scores.length > 0 && <ScoreBadge scores={scores} />}
         </span>
 
         {/* Right panel - visual bar with optional hover card */}
@@ -939,7 +1058,10 @@ export function TimelineBar({
           )}
 
           {/* Bar container, centered vertically */}
-          <div className="absolute inset-y-0 flex w-full items-center">
+          <div
+            data-testid="timeline-bar-track"
+            className={cn('absolute inset-y-0 flex w-full items-center', dimmed && 'opacity-50')}
+          >
             {transformed && (
               <>
                 <VisualBar

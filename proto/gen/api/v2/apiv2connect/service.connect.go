@@ -9,6 +9,7 @@ import (
 	context "context"
 	errors "errors"
 	v2 "github.com/inngest/inngest/proto/gen/api/v2"
+	httpbody "google.golang.org/genproto/googleapis/api/httpbody"
 	http "net/http"
 	strings "strings"
 )
@@ -67,6 +68,8 @@ const (
 	V2ListFunctionRunsProcedure = "/api.v2.V2/ListFunctionRuns"
 	// V2GetEventRunsProcedure is the fully-qualified name of the V2's GetEventRuns RPC.
 	V2GetEventRunsProcedure = "/api.v2.V2/GetEventRuns"
+	// V2CreateReplayProcedure is the fully-qualified name of the V2's CreateReplay RPC.
+	V2CreateReplayProcedure = "/api.v2.V2/CreateReplay"
 	// V2RerunProcedure is the fully-qualified name of the V2's Rerun RPC.
 	V2RerunProcedure = "/api.v2.V2/Rerun"
 	// V2CancelRunProcedure is the fully-qualified name of the V2's CancelRun RPC.
@@ -75,6 +78,62 @@ const (
 	V2GetAppProcedure = "/api.v2.V2/GetApp"
 	// V2GetAppsProcedure is the fully-qualified name of the V2's GetApps RPC.
 	V2GetAppsProcedure = "/api.v2.V2/GetApps"
+	// V2CreateBuildProcedure is the fully-qualified name of the V2's CreateBuild RPC.
+	V2CreateBuildProcedure = "/api.v2.V2/CreateBuild"
+	// V2CommitBuildProcedure is the fully-qualified name of the V2's CommitBuild RPC.
+	V2CommitBuildProcedure = "/api.v2.V2/CommitBuild"
+	// V2GetBuildProcedure is the fully-qualified name of the V2's GetBuild RPC.
+	V2GetBuildProcedure = "/api.v2.V2/GetBuild"
+	// V2ListBuildsProcedure is the fully-qualified name of the V2's ListBuilds RPC.
+	V2ListBuildsProcedure = "/api.v2.V2/ListBuilds"
+	// V2CancelBuildProcedure is the fully-qualified name of the V2's CancelBuild RPC.
+	V2CancelBuildProcedure = "/api.v2.V2/CancelBuild"
+	// V2CreateSandboxProcedure is the fully-qualified name of the V2's CreateSandbox RPC.
+	V2CreateSandboxProcedure = "/api.v2.V2/CreateSandbox"
+	// V2ListSandboxesProcedure is the fully-qualified name of the V2's ListSandboxes RPC.
+	V2ListSandboxesProcedure = "/api.v2.V2/ListSandboxes"
+	// V2GetSandboxProcedure is the fully-qualified name of the V2's GetSandbox RPC.
+	V2GetSandboxProcedure = "/api.v2.V2/GetSandbox"
+	// V2DestroySandboxProcedure is the fully-qualified name of the V2's DestroySandbox RPC.
+	V2DestroySandboxProcedure = "/api.v2.V2/DestroySandbox"
+	// V2PauseSandboxProcedure is the fully-qualified name of the V2's PauseSandbox RPC.
+	V2PauseSandboxProcedure = "/api.v2.V2/PauseSandbox"
+	// V2ResumeSandboxProcedure is the fully-qualified name of the V2's ResumeSandbox RPC.
+	V2ResumeSandboxProcedure = "/api.v2.V2/ResumeSandbox"
+	// V2CreateSandboxSnapshotProcedure is the fully-qualified name of the V2's CreateSandboxSnapshot
+	// RPC.
+	V2CreateSandboxSnapshotProcedure = "/api.v2.V2/CreateSandboxSnapshot"
+	// V2ListSandboxSnapshotsProcedure is the fully-qualified name of the V2's ListSandboxSnapshots RPC.
+	V2ListSandboxSnapshotsProcedure = "/api.v2.V2/ListSandboxSnapshots"
+	// V2GetSandboxSnapshotProcedure is the fully-qualified name of the V2's GetSandboxSnapshot RPC.
+	V2GetSandboxSnapshotProcedure = "/api.v2.V2/GetSandboxSnapshot"
+	// V2DeleteSandboxSnapshotProcedure is the fully-qualified name of the V2's DeleteSandboxSnapshot
+	// RPC.
+	V2DeleteSandboxSnapshotProcedure = "/api.v2.V2/DeleteSandboxSnapshot"
+	// V2ExecSandboxProcedure is the fully-qualified name of the V2's ExecSandbox RPC.
+	V2ExecSandboxProcedure = "/api.v2.V2/ExecSandbox"
+	// V2StreamSandboxLogsProcedure is the fully-qualified name of the V2's StreamSandboxLogs RPC.
+	V2StreamSandboxLogsProcedure = "/api.v2.V2/StreamSandboxLogs"
+	// V2WriteSandboxFileProcedure is the fully-qualified name of the V2's WriteSandboxFile RPC.
+	V2WriteSandboxFileProcedure = "/api.v2.V2/WriteSandboxFile"
+	// V2ReadSandboxFileProcedure is the fully-qualified name of the V2's ReadSandboxFile RPC.
+	V2ReadSandboxFileProcedure = "/api.v2.V2/ReadSandboxFile"
+	// V2StartSandboxProcessProcedure is the fully-qualified name of the V2's StartSandboxProcess RPC.
+	V2StartSandboxProcessProcedure = "/api.v2.V2/StartSandboxProcess"
+	// V2ListSandboxProcessesProcedure is the fully-qualified name of the V2's ListSandboxProcesses RPC.
+	V2ListSandboxProcessesProcedure = "/api.v2.V2/ListSandboxProcesses"
+	// V2GetSandboxProcessProcedure is the fully-qualified name of the V2's GetSandboxProcess RPC.
+	V2GetSandboxProcessProcedure = "/api.v2.V2/GetSandboxProcess"
+	// V2SignalSandboxProcessProcedure is the fully-qualified name of the V2's SignalSandboxProcess RPC.
+	V2SignalSandboxProcessProcedure = "/api.v2.V2/SignalSandboxProcess"
+	// V2WaitSandboxProcessProcedure is the fully-qualified name of the V2's WaitSandboxProcess RPC.
+	V2WaitSandboxProcessProcedure = "/api.v2.V2/WaitSandboxProcess"
+	// V2GetSandboxProcessOutputProcedure is the fully-qualified name of the V2's
+	// GetSandboxProcessOutput RPC.
+	V2GetSandboxProcessOutputProcedure = "/api.v2.V2/GetSandboxProcessOutput"
+	// V2StreamSandboxProcessOutputProcedure is the fully-qualified name of the V2's
+	// StreamSandboxProcessOutput RPC.
+	V2StreamSandboxProcessOutputProcedure = "/api.v2.V2/StreamSandboxProcessOutput"
 	// V2CreateScoreProcedure is the fully-qualified name of the V2's CreateScore RPC.
 	V2CreateScoreProcedure = "/api.v2.V2/CreateScore"
 	// V2SyncAppProcedure is the fully-qualified name of the V2's SyncApp RPC.
@@ -83,8 +142,14 @@ const (
 	V2GetFunctionTraceProcedure = "/api.v2.V2/GetFunctionTrace"
 	// V2GetFunctionProcedure is the fully-qualified name of the V2's GetFunction RPC.
 	V2GetFunctionProcedure = "/api.v2.V2/GetFunction"
+	// V2PauseFunctionProcedure is the fully-qualified name of the V2's PauseFunction RPC.
+	V2PauseFunctionProcedure = "/api.v2.V2/PauseFunction"
+	// V2ResumeFunctionProcedure is the fully-qualified name of the V2's ResumeFunction RPC.
+	V2ResumeFunctionProcedure = "/api.v2.V2/ResumeFunction"
 	// V2GetFunctionsProcedure is the fully-qualified name of the V2's GetFunctions RPC.
 	V2GetFunctionsProcedure = "/api.v2.V2/GetFunctions"
+	// V2SendEventProcedure is the fully-qualified name of the V2's SendEvent RPC.
+	V2SendEventProcedure = "/api.v2.V2/SendEvent"
 	// V2InvokeFunctionProcedure is the fully-qualified name of the V2's InvokeFunction RPC.
 	V2InvokeFunctionProcedure = "/api.v2.V2/InvokeFunction"
 	// V2ListInsightsTablesProcedure is the fully-qualified name of the V2's ListInsightsTables RPC.
@@ -129,15 +194,45 @@ type V2Client interface {
 	ListRuns(context.Context, *connect.Request[v2.ListRunsRequest]) (*connect.Response[v2.ListRunsResponse], error)
 	ListFunctionRuns(context.Context, *connect.Request[v2.ListFunctionRunsRequest]) (*connect.Response[v2.ListFunctionRunsResponse], error)
 	GetEventRuns(context.Context, *connect.Request[v2.GetEventRunsRequest]) (*connect.Response[v2.GetEventRunsResponse], error)
+	CreateReplay(context.Context, *connect.Request[v2.CreateReplayRequest]) (*connect.Response[v2.CreateReplayResponse], error)
 	Rerun(context.Context, *connect.Request[v2.RerunRequest]) (*connect.Response[v2.RerunResponse], error)
 	CancelRun(context.Context, *connect.Request[v2.CancelRunRequest]) (*connect.Response[v2.CancelRunResponse], error)
 	GetApp(context.Context, *connect.Request[v2.GetAppRequest]) (*connect.Response[v2.GetAppResponse], error)
 	GetApps(context.Context, *connect.Request[v2.GetAppsRequest]) (*connect.Response[v2.GetAppsResponse], error)
+	CreateBuild(context.Context, *connect.Request[v2.CreateBuildRequest]) (*connect.Response[v2.CreateBuildResponse], error)
+	CommitBuild(context.Context, *connect.Request[v2.CommitBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	GetBuild(context.Context, *connect.Request[v2.GetBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	ListBuilds(context.Context, *connect.Request[v2.ListBuildsRequest]) (*connect.Response[v2.ListBuildsResponse], error)
+	CancelBuild(context.Context, *connect.Request[v2.CancelBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	CreateSandbox(context.Context, *connect.Request[v2.CreateSandboxRequest]) (*connect.Response[v2.CreateSandboxResponse], error)
+	ListSandboxes(context.Context, *connect.Request[v2.ListSandboxesRequest]) (*connect.Response[v2.ListSandboxesResponse], error)
+	GetSandbox(context.Context, *connect.Request[v2.GetSandboxRequest]) (*connect.Response[v2.GetSandboxResponse], error)
+	DestroySandbox(context.Context, *connect.Request[v2.DestroySandboxRequest]) (*connect.Response[v2.DestroySandboxResponse], error)
+	PauseSandbox(context.Context, *connect.Request[v2.PauseSandboxRequest]) (*connect.Response[v2.PauseSandboxResponse], error)
+	ResumeSandbox(context.Context, *connect.Request[v2.ResumeSandboxRequest]) (*connect.Response[v2.ResumeSandboxResponse], error)
+	CreateSandboxSnapshot(context.Context, *connect.Request[v2.CreateSandboxSnapshotRequest]) (*connect.Response[v2.CreateSandboxSnapshotResponse], error)
+	ListSandboxSnapshots(context.Context, *connect.Request[v2.ListSandboxSnapshotsRequest]) (*connect.Response[v2.ListSandboxSnapshotsResponse], error)
+	GetSandboxSnapshot(context.Context, *connect.Request[v2.GetSandboxSnapshotRequest]) (*connect.Response[v2.GetSandboxSnapshotResponse], error)
+	DeleteSandboxSnapshot(context.Context, *connect.Request[v2.DeleteSandboxSnapshotRequest]) (*connect.Response[v2.DeleteSandboxSnapshotResponse], error)
+	ExecSandbox(context.Context, *connect.Request[v2.ExecSandboxRequest]) (*connect.Response[v2.ExecSandboxResponse], error)
+	StreamSandboxLogs(context.Context, *connect.Request[v2.StreamSandboxLogsRequest]) (*connect.ServerStreamForClient[v2.StreamSandboxLogsResponse], error)
+	WriteSandboxFile(context.Context, *connect.Request[v2.WriteSandboxFileRequest]) (*connect.Response[v2.WriteSandboxFileResponse], error)
+	ReadSandboxFile(context.Context, *connect.Request[v2.ReadSandboxFileRequest]) (*connect.ServerStreamForClient[httpbody.HttpBody], error)
+	StartSandboxProcess(context.Context, *connect.Request[v2.StartSandboxProcessRequest]) (*connect.Response[v2.StartSandboxProcessResponse], error)
+	ListSandboxProcesses(context.Context, *connect.Request[v2.ListSandboxProcessesRequest]) (*connect.Response[v2.ListSandboxProcessesResponse], error)
+	GetSandboxProcess(context.Context, *connect.Request[v2.GetSandboxProcessRequest]) (*connect.Response[v2.GetSandboxProcessResponse], error)
+	SignalSandboxProcess(context.Context, *connect.Request[v2.SignalSandboxProcessRequest]) (*connect.Response[v2.SignalSandboxProcessResponse], error)
+	WaitSandboxProcess(context.Context, *connect.Request[v2.WaitSandboxProcessRequest]) (*connect.Response[v2.WaitSandboxProcessResponse], error)
+	GetSandboxProcessOutput(context.Context, *connect.Request[v2.GetSandboxProcessOutputRequest]) (*connect.Response[v2.GetSandboxProcessOutputResponse], error)
+	StreamSandboxProcessOutput(context.Context, *connect.Request[v2.StreamSandboxProcessOutputRequest]) (*connect.ServerStreamForClient[v2.StreamSandboxProcessOutputResponse], error)
 	CreateScore(context.Context, *connect.Request[v2.CreateScoreRequest]) (*connect.Response[v2.CreateScoreResponse], error)
 	SyncApp(context.Context, *connect.Request[v2.SyncAppRequest]) (*connect.Response[v2.SyncAppResponse], error)
 	GetFunctionTrace(context.Context, *connect.Request[v2.GetFunctionTraceRequest]) (*connect.Response[v2.GetFunctionTraceResponse], error)
 	GetFunction(context.Context, *connect.Request[v2.GetFunctionRequest]) (*connect.Response[v2.GetFunctionResponse], error)
+	PauseFunction(context.Context, *connect.Request[v2.PauseFunctionRequest]) (*connect.Response[v2.PauseFunctionResponse], error)
+	ResumeFunction(context.Context, *connect.Request[v2.ResumeFunctionRequest]) (*connect.Response[v2.ResumeFunctionResponse], error)
 	GetFunctions(context.Context, *connect.Request[v2.GetFunctionsRequest]) (*connect.Response[v2.GetFunctionsResponse], error)
+	SendEvent(context.Context, *connect.Request[v2.SendEventRequest]) (*connect.Response[v2.SendEventResponse], error)
 	InvokeFunction(context.Context, *connect.Request[v2.InvokeFunctionRequest]) (*connect.Response[v2.InvokeFunctionResponse], error)
 	ListInsightsTables(context.Context, *connect.Request[v2.ListInsightsTablesRequest]) (*connect.Response[v2.ListInsightsTablesResponse], error)
 	ListInsightsEventSchemas(context.Context, *connect.Request[v2.ListInsightsEventSchemasRequest]) (*connect.Response[v2.ListInsightsEventSchemasResponse], error)
@@ -257,6 +352,12 @@ func NewV2Client(httpClient connect.HTTPClient, baseURL string, opts ...connect.
 			connect.WithSchema(v2Methods.ByName("GetEventRuns")),
 			connect.WithClientOptions(opts...),
 		),
+		createReplay: connect.NewClient[v2.CreateReplayRequest, v2.CreateReplayResponse](
+			httpClient,
+			baseURL+V2CreateReplayProcedure,
+			connect.WithSchema(v2Methods.ByName("CreateReplay")),
+			connect.WithClientOptions(opts...),
+		),
 		rerun: connect.NewClient[v2.RerunRequest, v2.RerunResponse](
 			httpClient,
 			baseURL+V2RerunProcedure,
@@ -279,6 +380,162 @@ func NewV2Client(httpClient connect.HTTPClient, baseURL string, opts ...connect.
 			httpClient,
 			baseURL+V2GetAppsProcedure,
 			connect.WithSchema(v2Methods.ByName("GetApps")),
+			connect.WithClientOptions(opts...),
+		),
+		createBuild: connect.NewClient[v2.CreateBuildRequest, v2.CreateBuildResponse](
+			httpClient,
+			baseURL+V2CreateBuildProcedure,
+			connect.WithSchema(v2Methods.ByName("CreateBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		commitBuild: connect.NewClient[v2.CommitBuildRequest, v2.BuildResponse](
+			httpClient,
+			baseURL+V2CommitBuildProcedure,
+			connect.WithSchema(v2Methods.ByName("CommitBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		getBuild: connect.NewClient[v2.GetBuildRequest, v2.BuildResponse](
+			httpClient,
+			baseURL+V2GetBuildProcedure,
+			connect.WithSchema(v2Methods.ByName("GetBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		listBuilds: connect.NewClient[v2.ListBuildsRequest, v2.ListBuildsResponse](
+			httpClient,
+			baseURL+V2ListBuildsProcedure,
+			connect.WithSchema(v2Methods.ByName("ListBuilds")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelBuild: connect.NewClient[v2.CancelBuildRequest, v2.BuildResponse](
+			httpClient,
+			baseURL+V2CancelBuildProcedure,
+			connect.WithSchema(v2Methods.ByName("CancelBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		createSandbox: connect.NewClient[v2.CreateSandboxRequest, v2.CreateSandboxResponse](
+			httpClient,
+			baseURL+V2CreateSandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("CreateSandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		listSandboxes: connect.NewClient[v2.ListSandboxesRequest, v2.ListSandboxesResponse](
+			httpClient,
+			baseURL+V2ListSandboxesProcedure,
+			connect.WithSchema(v2Methods.ByName("ListSandboxes")),
+			connect.WithClientOptions(opts...),
+		),
+		getSandbox: connect.NewClient[v2.GetSandboxRequest, v2.GetSandboxResponse](
+			httpClient,
+			baseURL+V2GetSandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("GetSandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		destroySandbox: connect.NewClient[v2.DestroySandboxRequest, v2.DestroySandboxResponse](
+			httpClient,
+			baseURL+V2DestroySandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("DestroySandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		pauseSandbox: connect.NewClient[v2.PauseSandboxRequest, v2.PauseSandboxResponse](
+			httpClient,
+			baseURL+V2PauseSandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("PauseSandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		resumeSandbox: connect.NewClient[v2.ResumeSandboxRequest, v2.ResumeSandboxResponse](
+			httpClient,
+			baseURL+V2ResumeSandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("ResumeSandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		createSandboxSnapshot: connect.NewClient[v2.CreateSandboxSnapshotRequest, v2.CreateSandboxSnapshotResponse](
+			httpClient,
+			baseURL+V2CreateSandboxSnapshotProcedure,
+			connect.WithSchema(v2Methods.ByName("CreateSandboxSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		listSandboxSnapshots: connect.NewClient[v2.ListSandboxSnapshotsRequest, v2.ListSandboxSnapshotsResponse](
+			httpClient,
+			baseURL+V2ListSandboxSnapshotsProcedure,
+			connect.WithSchema(v2Methods.ByName("ListSandboxSnapshots")),
+			connect.WithClientOptions(opts...),
+		),
+		getSandboxSnapshot: connect.NewClient[v2.GetSandboxSnapshotRequest, v2.GetSandboxSnapshotResponse](
+			httpClient,
+			baseURL+V2GetSandboxSnapshotProcedure,
+			connect.WithSchema(v2Methods.ByName("GetSandboxSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSandboxSnapshot: connect.NewClient[v2.DeleteSandboxSnapshotRequest, v2.DeleteSandboxSnapshotResponse](
+			httpClient,
+			baseURL+V2DeleteSandboxSnapshotProcedure,
+			connect.WithSchema(v2Methods.ByName("DeleteSandboxSnapshot")),
+			connect.WithClientOptions(opts...),
+		),
+		execSandbox: connect.NewClient[v2.ExecSandboxRequest, v2.ExecSandboxResponse](
+			httpClient,
+			baseURL+V2ExecSandboxProcedure,
+			connect.WithSchema(v2Methods.ByName("ExecSandbox")),
+			connect.WithClientOptions(opts...),
+		),
+		streamSandboxLogs: connect.NewClient[v2.StreamSandboxLogsRequest, v2.StreamSandboxLogsResponse](
+			httpClient,
+			baseURL+V2StreamSandboxLogsProcedure,
+			connect.WithSchema(v2Methods.ByName("StreamSandboxLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		writeSandboxFile: connect.NewClient[v2.WriteSandboxFileRequest, v2.WriteSandboxFileResponse](
+			httpClient,
+			baseURL+V2WriteSandboxFileProcedure,
+			connect.WithSchema(v2Methods.ByName("WriteSandboxFile")),
+			connect.WithClientOptions(opts...),
+		),
+		readSandboxFile: connect.NewClient[v2.ReadSandboxFileRequest, httpbody.HttpBody](
+			httpClient,
+			baseURL+V2ReadSandboxFileProcedure,
+			connect.WithSchema(v2Methods.ByName("ReadSandboxFile")),
+			connect.WithClientOptions(opts...),
+		),
+		startSandboxProcess: connect.NewClient[v2.StartSandboxProcessRequest, v2.StartSandboxProcessResponse](
+			httpClient,
+			baseURL+V2StartSandboxProcessProcedure,
+			connect.WithSchema(v2Methods.ByName("StartSandboxProcess")),
+			connect.WithClientOptions(opts...),
+		),
+		listSandboxProcesses: connect.NewClient[v2.ListSandboxProcessesRequest, v2.ListSandboxProcessesResponse](
+			httpClient,
+			baseURL+V2ListSandboxProcessesProcedure,
+			connect.WithSchema(v2Methods.ByName("ListSandboxProcesses")),
+			connect.WithClientOptions(opts...),
+		),
+		getSandboxProcess: connect.NewClient[v2.GetSandboxProcessRequest, v2.GetSandboxProcessResponse](
+			httpClient,
+			baseURL+V2GetSandboxProcessProcedure,
+			connect.WithSchema(v2Methods.ByName("GetSandboxProcess")),
+			connect.WithClientOptions(opts...),
+		),
+		signalSandboxProcess: connect.NewClient[v2.SignalSandboxProcessRequest, v2.SignalSandboxProcessResponse](
+			httpClient,
+			baseURL+V2SignalSandboxProcessProcedure,
+			connect.WithSchema(v2Methods.ByName("SignalSandboxProcess")),
+			connect.WithClientOptions(opts...),
+		),
+		waitSandboxProcess: connect.NewClient[v2.WaitSandboxProcessRequest, v2.WaitSandboxProcessResponse](
+			httpClient,
+			baseURL+V2WaitSandboxProcessProcedure,
+			connect.WithSchema(v2Methods.ByName("WaitSandboxProcess")),
+			connect.WithClientOptions(opts...),
+		),
+		getSandboxProcessOutput: connect.NewClient[v2.GetSandboxProcessOutputRequest, v2.GetSandboxProcessOutputResponse](
+			httpClient,
+			baseURL+V2GetSandboxProcessOutputProcedure,
+			connect.WithSchema(v2Methods.ByName("GetSandboxProcessOutput")),
+			connect.WithClientOptions(opts...),
+		),
+		streamSandboxProcessOutput: connect.NewClient[v2.StreamSandboxProcessOutputRequest, v2.StreamSandboxProcessOutputResponse](
+			httpClient,
+			baseURL+V2StreamSandboxProcessOutputProcedure,
+			connect.WithSchema(v2Methods.ByName("StreamSandboxProcessOutput")),
 			connect.WithClientOptions(opts...),
 		),
 		createScore: connect.NewClient[v2.CreateScoreRequest, v2.CreateScoreResponse](
@@ -305,10 +562,28 @@ func NewV2Client(httpClient connect.HTTPClient, baseURL string, opts ...connect.
 			connect.WithSchema(v2Methods.ByName("GetFunction")),
 			connect.WithClientOptions(opts...),
 		),
+		pauseFunction: connect.NewClient[v2.PauseFunctionRequest, v2.PauseFunctionResponse](
+			httpClient,
+			baseURL+V2PauseFunctionProcedure,
+			connect.WithSchema(v2Methods.ByName("PauseFunction")),
+			connect.WithClientOptions(opts...),
+		),
+		resumeFunction: connect.NewClient[v2.ResumeFunctionRequest, v2.ResumeFunctionResponse](
+			httpClient,
+			baseURL+V2ResumeFunctionProcedure,
+			connect.WithSchema(v2Methods.ByName("ResumeFunction")),
+			connect.WithClientOptions(opts...),
+		),
 		getFunctions: connect.NewClient[v2.GetFunctionsRequest, v2.GetFunctionsResponse](
 			httpClient,
 			baseURL+V2GetFunctionsProcedure,
 			connect.WithSchema(v2Methods.ByName("GetFunctions")),
+			connect.WithClientOptions(opts...),
+		),
+		sendEvent: connect.NewClient[v2.SendEventRequest, v2.SendEventResponse](
+			httpClient,
+			baseURL+V2SendEventProcedure,
+			connect.WithSchema(v2Methods.ByName("SendEvent")),
 			connect.WithClientOptions(opts...),
 		),
 		invokeFunction: connect.NewClient[v2.InvokeFunctionRequest, v2.InvokeFunctionResponse](
@@ -376,41 +651,71 @@ func NewV2Client(httpClient connect.HTTPClient, baseURL string, opts ...connect.
 
 // v2Client implements V2Client.
 type v2Client struct {
-	health                   *connect.Client[v2.HealthRequest, v2.HealthResponse]
-	xSchemaOnly              *connect.Client[v2.HealthRequest, v2.ErrorResponse]
-	createPartnerAccount     *connect.Client[v2.CreateAccountRequest, v2.CreateAccountResponse]
-	createEnv                *connect.Client[v2.CreateEnvRequest, v2.CreateEnvResponse]
-	fetchPartnerAccounts     *connect.Client[v2.FetchAccountsRequest, v2.FetchAccountsResponse]
-	fetchAccount             *connect.Client[v2.FetchAccountRequest, v2.FetchAccountResponse]
-	fetchAccountEnvs         *connect.Client[v2.FetchAccountEnvsRequest, v2.FetchAccountEnvsResponse]
-	fetchAccountEventKeys    *connect.Client[v2.FetchAccountEventKeysRequest, v2.FetchAccountEventKeysResponse]
-	fetchAccountSigningKeys  *connect.Client[v2.FetchAccountSigningKeysRequest, v2.FetchAccountSigningKeysResponse]
-	createWebhook            *connect.Client[v2.CreateWebhookRequest, v2.CreateWebhookResponse]
-	listWebhooks             *connect.Client[v2.ListWebhooksRequest, v2.ListWebhooksResponse]
-	patchEnv                 *connect.Client[v2.PatchEnvRequest, v2.PatchEnvsResponse]
-	getFunctionRun           *connect.Client[v2.GetFunctionRunRequest, v2.GetFunctionRunResponse]
-	listRuns                 *connect.Client[v2.ListRunsRequest, v2.ListRunsResponse]
-	listFunctionRuns         *connect.Client[v2.ListFunctionRunsRequest, v2.ListFunctionRunsResponse]
-	getEventRuns             *connect.Client[v2.GetEventRunsRequest, v2.GetEventRunsResponse]
-	rerun                    *connect.Client[v2.RerunRequest, v2.RerunResponse]
-	cancelRun                *connect.Client[v2.CancelRunRequest, v2.CancelRunResponse]
-	getApp                   *connect.Client[v2.GetAppRequest, v2.GetAppResponse]
-	getApps                  *connect.Client[v2.GetAppsRequest, v2.GetAppsResponse]
-	createScore              *connect.Client[v2.CreateScoreRequest, v2.CreateScoreResponse]
-	syncApp                  *connect.Client[v2.SyncAppRequest, v2.SyncAppResponse]
-	getFunctionTrace         *connect.Client[v2.GetFunctionTraceRequest, v2.GetFunctionTraceResponse]
-	getFunction              *connect.Client[v2.GetFunctionRequest, v2.GetFunctionResponse]
-	getFunctions             *connect.Client[v2.GetFunctionsRequest, v2.GetFunctionsResponse]
-	invokeFunction           *connect.Client[v2.InvokeFunctionRequest, v2.InvokeFunctionResponse]
-	listInsightsTables       *connect.Client[v2.ListInsightsTablesRequest, v2.ListInsightsTablesResponse]
-	listInsightsEventSchemas *connect.Client[v2.ListInsightsEventSchemasRequest, v2.ListInsightsEventSchemasResponse]
-	queryInsightsPrompt      *connect.Client[v2.QueryInsightsPromptRequest, v2.QueryInsightsPromptResponse]
-	queryInsights            *connect.Client[v2.QueryInsightsRequest, v2.QueryInsightsResponse]
-	listExperiments          *connect.Client[v2.ListExperimentsRequest, v2.ListExperimentsResponse]
-	getExperiment            *connect.Client[v2.GetExperimentRequest, v2.GetExperimentResponse]
-	listSessionKeys          *connect.Client[v2.ListSessionKeysRequest, v2.ListSessionKeysResponse]
-	listSessions             *connect.Client[v2.ListSessionsRequest, v2.ListSessionsResponse]
-	listSessionRuns          *connect.Client[v2.ListSessionRunsRequest, v2.ListSessionRunsResponse]
+	health                     *connect.Client[v2.HealthRequest, v2.HealthResponse]
+	xSchemaOnly                *connect.Client[v2.HealthRequest, v2.ErrorResponse]
+	createPartnerAccount       *connect.Client[v2.CreateAccountRequest, v2.CreateAccountResponse]
+	createEnv                  *connect.Client[v2.CreateEnvRequest, v2.CreateEnvResponse]
+	fetchPartnerAccounts       *connect.Client[v2.FetchAccountsRequest, v2.FetchAccountsResponse]
+	fetchAccount               *connect.Client[v2.FetchAccountRequest, v2.FetchAccountResponse]
+	fetchAccountEnvs           *connect.Client[v2.FetchAccountEnvsRequest, v2.FetchAccountEnvsResponse]
+	fetchAccountEventKeys      *connect.Client[v2.FetchAccountEventKeysRequest, v2.FetchAccountEventKeysResponse]
+	fetchAccountSigningKeys    *connect.Client[v2.FetchAccountSigningKeysRequest, v2.FetchAccountSigningKeysResponse]
+	createWebhook              *connect.Client[v2.CreateWebhookRequest, v2.CreateWebhookResponse]
+	listWebhooks               *connect.Client[v2.ListWebhooksRequest, v2.ListWebhooksResponse]
+	patchEnv                   *connect.Client[v2.PatchEnvRequest, v2.PatchEnvsResponse]
+	getFunctionRun             *connect.Client[v2.GetFunctionRunRequest, v2.GetFunctionRunResponse]
+	listRuns                   *connect.Client[v2.ListRunsRequest, v2.ListRunsResponse]
+	listFunctionRuns           *connect.Client[v2.ListFunctionRunsRequest, v2.ListFunctionRunsResponse]
+	getEventRuns               *connect.Client[v2.GetEventRunsRequest, v2.GetEventRunsResponse]
+	createReplay               *connect.Client[v2.CreateReplayRequest, v2.CreateReplayResponse]
+	rerun                      *connect.Client[v2.RerunRequest, v2.RerunResponse]
+	cancelRun                  *connect.Client[v2.CancelRunRequest, v2.CancelRunResponse]
+	getApp                     *connect.Client[v2.GetAppRequest, v2.GetAppResponse]
+	getApps                    *connect.Client[v2.GetAppsRequest, v2.GetAppsResponse]
+	createBuild                *connect.Client[v2.CreateBuildRequest, v2.CreateBuildResponse]
+	commitBuild                *connect.Client[v2.CommitBuildRequest, v2.BuildResponse]
+	getBuild                   *connect.Client[v2.GetBuildRequest, v2.BuildResponse]
+	listBuilds                 *connect.Client[v2.ListBuildsRequest, v2.ListBuildsResponse]
+	cancelBuild                *connect.Client[v2.CancelBuildRequest, v2.BuildResponse]
+	createSandbox              *connect.Client[v2.CreateSandboxRequest, v2.CreateSandboxResponse]
+	listSandboxes              *connect.Client[v2.ListSandboxesRequest, v2.ListSandboxesResponse]
+	getSandbox                 *connect.Client[v2.GetSandboxRequest, v2.GetSandboxResponse]
+	destroySandbox             *connect.Client[v2.DestroySandboxRequest, v2.DestroySandboxResponse]
+	pauseSandbox               *connect.Client[v2.PauseSandboxRequest, v2.PauseSandboxResponse]
+	resumeSandbox              *connect.Client[v2.ResumeSandboxRequest, v2.ResumeSandboxResponse]
+	createSandboxSnapshot      *connect.Client[v2.CreateSandboxSnapshotRequest, v2.CreateSandboxSnapshotResponse]
+	listSandboxSnapshots       *connect.Client[v2.ListSandboxSnapshotsRequest, v2.ListSandboxSnapshotsResponse]
+	getSandboxSnapshot         *connect.Client[v2.GetSandboxSnapshotRequest, v2.GetSandboxSnapshotResponse]
+	deleteSandboxSnapshot      *connect.Client[v2.DeleteSandboxSnapshotRequest, v2.DeleteSandboxSnapshotResponse]
+	execSandbox                *connect.Client[v2.ExecSandboxRequest, v2.ExecSandboxResponse]
+	streamSandboxLogs          *connect.Client[v2.StreamSandboxLogsRequest, v2.StreamSandboxLogsResponse]
+	writeSandboxFile           *connect.Client[v2.WriteSandboxFileRequest, v2.WriteSandboxFileResponse]
+	readSandboxFile            *connect.Client[v2.ReadSandboxFileRequest, httpbody.HttpBody]
+	startSandboxProcess        *connect.Client[v2.StartSandboxProcessRequest, v2.StartSandboxProcessResponse]
+	listSandboxProcesses       *connect.Client[v2.ListSandboxProcessesRequest, v2.ListSandboxProcessesResponse]
+	getSandboxProcess          *connect.Client[v2.GetSandboxProcessRequest, v2.GetSandboxProcessResponse]
+	signalSandboxProcess       *connect.Client[v2.SignalSandboxProcessRequest, v2.SignalSandboxProcessResponse]
+	waitSandboxProcess         *connect.Client[v2.WaitSandboxProcessRequest, v2.WaitSandboxProcessResponse]
+	getSandboxProcessOutput    *connect.Client[v2.GetSandboxProcessOutputRequest, v2.GetSandboxProcessOutputResponse]
+	streamSandboxProcessOutput *connect.Client[v2.StreamSandboxProcessOutputRequest, v2.StreamSandboxProcessOutputResponse]
+	createScore                *connect.Client[v2.CreateScoreRequest, v2.CreateScoreResponse]
+	syncApp                    *connect.Client[v2.SyncAppRequest, v2.SyncAppResponse]
+	getFunctionTrace           *connect.Client[v2.GetFunctionTraceRequest, v2.GetFunctionTraceResponse]
+	getFunction                *connect.Client[v2.GetFunctionRequest, v2.GetFunctionResponse]
+	pauseFunction              *connect.Client[v2.PauseFunctionRequest, v2.PauseFunctionResponse]
+	resumeFunction             *connect.Client[v2.ResumeFunctionRequest, v2.ResumeFunctionResponse]
+	getFunctions               *connect.Client[v2.GetFunctionsRequest, v2.GetFunctionsResponse]
+	sendEvent                  *connect.Client[v2.SendEventRequest, v2.SendEventResponse]
+	invokeFunction             *connect.Client[v2.InvokeFunctionRequest, v2.InvokeFunctionResponse]
+	listInsightsTables         *connect.Client[v2.ListInsightsTablesRequest, v2.ListInsightsTablesResponse]
+	listInsightsEventSchemas   *connect.Client[v2.ListInsightsEventSchemasRequest, v2.ListInsightsEventSchemasResponse]
+	queryInsightsPrompt        *connect.Client[v2.QueryInsightsPromptRequest, v2.QueryInsightsPromptResponse]
+	queryInsights              *connect.Client[v2.QueryInsightsRequest, v2.QueryInsightsResponse]
+	listExperiments            *connect.Client[v2.ListExperimentsRequest, v2.ListExperimentsResponse]
+	getExperiment              *connect.Client[v2.GetExperimentRequest, v2.GetExperimentResponse]
+	listSessionKeys            *connect.Client[v2.ListSessionKeysRequest, v2.ListSessionKeysResponse]
+	listSessions               *connect.Client[v2.ListSessionsRequest, v2.ListSessionsResponse]
+	listSessionRuns            *connect.Client[v2.ListSessionRunsRequest, v2.ListSessionRunsResponse]
 }
 
 // Health calls api.v2.V2.Health.
@@ -493,6 +798,11 @@ func (c *v2Client) GetEventRuns(ctx context.Context, req *connect.Request[v2.Get
 	return c.getEventRuns.CallUnary(ctx, req)
 }
 
+// CreateReplay calls api.v2.V2.CreateReplay.
+func (c *v2Client) CreateReplay(ctx context.Context, req *connect.Request[v2.CreateReplayRequest]) (*connect.Response[v2.CreateReplayResponse], error) {
+	return c.createReplay.CallUnary(ctx, req)
+}
+
 // Rerun calls api.v2.V2.Rerun.
 func (c *v2Client) Rerun(ctx context.Context, req *connect.Request[v2.RerunRequest]) (*connect.Response[v2.RerunResponse], error) {
 	return c.rerun.CallUnary(ctx, req)
@@ -511,6 +821,136 @@ func (c *v2Client) GetApp(ctx context.Context, req *connect.Request[v2.GetAppReq
 // GetApps calls api.v2.V2.GetApps.
 func (c *v2Client) GetApps(ctx context.Context, req *connect.Request[v2.GetAppsRequest]) (*connect.Response[v2.GetAppsResponse], error) {
 	return c.getApps.CallUnary(ctx, req)
+}
+
+// CreateBuild calls api.v2.V2.CreateBuild.
+func (c *v2Client) CreateBuild(ctx context.Context, req *connect.Request[v2.CreateBuildRequest]) (*connect.Response[v2.CreateBuildResponse], error) {
+	return c.createBuild.CallUnary(ctx, req)
+}
+
+// CommitBuild calls api.v2.V2.CommitBuild.
+func (c *v2Client) CommitBuild(ctx context.Context, req *connect.Request[v2.CommitBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return c.commitBuild.CallUnary(ctx, req)
+}
+
+// GetBuild calls api.v2.V2.GetBuild.
+func (c *v2Client) GetBuild(ctx context.Context, req *connect.Request[v2.GetBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return c.getBuild.CallUnary(ctx, req)
+}
+
+// ListBuilds calls api.v2.V2.ListBuilds.
+func (c *v2Client) ListBuilds(ctx context.Context, req *connect.Request[v2.ListBuildsRequest]) (*connect.Response[v2.ListBuildsResponse], error) {
+	return c.listBuilds.CallUnary(ctx, req)
+}
+
+// CancelBuild calls api.v2.V2.CancelBuild.
+func (c *v2Client) CancelBuild(ctx context.Context, req *connect.Request[v2.CancelBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return c.cancelBuild.CallUnary(ctx, req)
+}
+
+// CreateSandbox calls api.v2.V2.CreateSandbox.
+func (c *v2Client) CreateSandbox(ctx context.Context, req *connect.Request[v2.CreateSandboxRequest]) (*connect.Response[v2.CreateSandboxResponse], error) {
+	return c.createSandbox.CallUnary(ctx, req)
+}
+
+// ListSandboxes calls api.v2.V2.ListSandboxes.
+func (c *v2Client) ListSandboxes(ctx context.Context, req *connect.Request[v2.ListSandboxesRequest]) (*connect.Response[v2.ListSandboxesResponse], error) {
+	return c.listSandboxes.CallUnary(ctx, req)
+}
+
+// GetSandbox calls api.v2.V2.GetSandbox.
+func (c *v2Client) GetSandbox(ctx context.Context, req *connect.Request[v2.GetSandboxRequest]) (*connect.Response[v2.GetSandboxResponse], error) {
+	return c.getSandbox.CallUnary(ctx, req)
+}
+
+// DestroySandbox calls api.v2.V2.DestroySandbox.
+func (c *v2Client) DestroySandbox(ctx context.Context, req *connect.Request[v2.DestroySandboxRequest]) (*connect.Response[v2.DestroySandboxResponse], error) {
+	return c.destroySandbox.CallUnary(ctx, req)
+}
+
+// PauseSandbox calls api.v2.V2.PauseSandbox.
+func (c *v2Client) PauseSandbox(ctx context.Context, req *connect.Request[v2.PauseSandboxRequest]) (*connect.Response[v2.PauseSandboxResponse], error) {
+	return c.pauseSandbox.CallUnary(ctx, req)
+}
+
+// ResumeSandbox calls api.v2.V2.ResumeSandbox.
+func (c *v2Client) ResumeSandbox(ctx context.Context, req *connect.Request[v2.ResumeSandboxRequest]) (*connect.Response[v2.ResumeSandboxResponse], error) {
+	return c.resumeSandbox.CallUnary(ctx, req)
+}
+
+// CreateSandboxSnapshot calls api.v2.V2.CreateSandboxSnapshot.
+func (c *v2Client) CreateSandboxSnapshot(ctx context.Context, req *connect.Request[v2.CreateSandboxSnapshotRequest]) (*connect.Response[v2.CreateSandboxSnapshotResponse], error) {
+	return c.createSandboxSnapshot.CallUnary(ctx, req)
+}
+
+// ListSandboxSnapshots calls api.v2.V2.ListSandboxSnapshots.
+func (c *v2Client) ListSandboxSnapshots(ctx context.Context, req *connect.Request[v2.ListSandboxSnapshotsRequest]) (*connect.Response[v2.ListSandboxSnapshotsResponse], error) {
+	return c.listSandboxSnapshots.CallUnary(ctx, req)
+}
+
+// GetSandboxSnapshot calls api.v2.V2.GetSandboxSnapshot.
+func (c *v2Client) GetSandboxSnapshot(ctx context.Context, req *connect.Request[v2.GetSandboxSnapshotRequest]) (*connect.Response[v2.GetSandboxSnapshotResponse], error) {
+	return c.getSandboxSnapshot.CallUnary(ctx, req)
+}
+
+// DeleteSandboxSnapshot calls api.v2.V2.DeleteSandboxSnapshot.
+func (c *v2Client) DeleteSandboxSnapshot(ctx context.Context, req *connect.Request[v2.DeleteSandboxSnapshotRequest]) (*connect.Response[v2.DeleteSandboxSnapshotResponse], error) {
+	return c.deleteSandboxSnapshot.CallUnary(ctx, req)
+}
+
+// ExecSandbox calls api.v2.V2.ExecSandbox.
+func (c *v2Client) ExecSandbox(ctx context.Context, req *connect.Request[v2.ExecSandboxRequest]) (*connect.Response[v2.ExecSandboxResponse], error) {
+	return c.execSandbox.CallUnary(ctx, req)
+}
+
+// StreamSandboxLogs calls api.v2.V2.StreamSandboxLogs.
+func (c *v2Client) StreamSandboxLogs(ctx context.Context, req *connect.Request[v2.StreamSandboxLogsRequest]) (*connect.ServerStreamForClient[v2.StreamSandboxLogsResponse], error) {
+	return c.streamSandboxLogs.CallServerStream(ctx, req)
+}
+
+// WriteSandboxFile calls api.v2.V2.WriteSandboxFile.
+func (c *v2Client) WriteSandboxFile(ctx context.Context, req *connect.Request[v2.WriteSandboxFileRequest]) (*connect.Response[v2.WriteSandboxFileResponse], error) {
+	return c.writeSandboxFile.CallUnary(ctx, req)
+}
+
+// ReadSandboxFile calls api.v2.V2.ReadSandboxFile.
+func (c *v2Client) ReadSandboxFile(ctx context.Context, req *connect.Request[v2.ReadSandboxFileRequest]) (*connect.ServerStreamForClient[httpbody.HttpBody], error) {
+	return c.readSandboxFile.CallServerStream(ctx, req)
+}
+
+// StartSandboxProcess calls api.v2.V2.StartSandboxProcess.
+func (c *v2Client) StartSandboxProcess(ctx context.Context, req *connect.Request[v2.StartSandboxProcessRequest]) (*connect.Response[v2.StartSandboxProcessResponse], error) {
+	return c.startSandboxProcess.CallUnary(ctx, req)
+}
+
+// ListSandboxProcesses calls api.v2.V2.ListSandboxProcesses.
+func (c *v2Client) ListSandboxProcesses(ctx context.Context, req *connect.Request[v2.ListSandboxProcessesRequest]) (*connect.Response[v2.ListSandboxProcessesResponse], error) {
+	return c.listSandboxProcesses.CallUnary(ctx, req)
+}
+
+// GetSandboxProcess calls api.v2.V2.GetSandboxProcess.
+func (c *v2Client) GetSandboxProcess(ctx context.Context, req *connect.Request[v2.GetSandboxProcessRequest]) (*connect.Response[v2.GetSandboxProcessResponse], error) {
+	return c.getSandboxProcess.CallUnary(ctx, req)
+}
+
+// SignalSandboxProcess calls api.v2.V2.SignalSandboxProcess.
+func (c *v2Client) SignalSandboxProcess(ctx context.Context, req *connect.Request[v2.SignalSandboxProcessRequest]) (*connect.Response[v2.SignalSandboxProcessResponse], error) {
+	return c.signalSandboxProcess.CallUnary(ctx, req)
+}
+
+// WaitSandboxProcess calls api.v2.V2.WaitSandboxProcess.
+func (c *v2Client) WaitSandboxProcess(ctx context.Context, req *connect.Request[v2.WaitSandboxProcessRequest]) (*connect.Response[v2.WaitSandboxProcessResponse], error) {
+	return c.waitSandboxProcess.CallUnary(ctx, req)
+}
+
+// GetSandboxProcessOutput calls api.v2.V2.GetSandboxProcessOutput.
+func (c *v2Client) GetSandboxProcessOutput(ctx context.Context, req *connect.Request[v2.GetSandboxProcessOutputRequest]) (*connect.Response[v2.GetSandboxProcessOutputResponse], error) {
+	return c.getSandboxProcessOutput.CallUnary(ctx, req)
+}
+
+// StreamSandboxProcessOutput calls api.v2.V2.StreamSandboxProcessOutput.
+func (c *v2Client) StreamSandboxProcessOutput(ctx context.Context, req *connect.Request[v2.StreamSandboxProcessOutputRequest]) (*connect.ServerStreamForClient[v2.StreamSandboxProcessOutputResponse], error) {
+	return c.streamSandboxProcessOutput.CallServerStream(ctx, req)
 }
 
 // CreateScore calls api.v2.V2.CreateScore.
@@ -533,9 +973,24 @@ func (c *v2Client) GetFunction(ctx context.Context, req *connect.Request[v2.GetF
 	return c.getFunction.CallUnary(ctx, req)
 }
 
+// PauseFunction calls api.v2.V2.PauseFunction.
+func (c *v2Client) PauseFunction(ctx context.Context, req *connect.Request[v2.PauseFunctionRequest]) (*connect.Response[v2.PauseFunctionResponse], error) {
+	return c.pauseFunction.CallUnary(ctx, req)
+}
+
+// ResumeFunction calls api.v2.V2.ResumeFunction.
+func (c *v2Client) ResumeFunction(ctx context.Context, req *connect.Request[v2.ResumeFunctionRequest]) (*connect.Response[v2.ResumeFunctionResponse], error) {
+	return c.resumeFunction.CallUnary(ctx, req)
+}
+
 // GetFunctions calls api.v2.V2.GetFunctions.
 func (c *v2Client) GetFunctions(ctx context.Context, req *connect.Request[v2.GetFunctionsRequest]) (*connect.Response[v2.GetFunctionsResponse], error) {
 	return c.getFunctions.CallUnary(ctx, req)
+}
+
+// SendEvent calls api.v2.V2.SendEvent.
+func (c *v2Client) SendEvent(ctx context.Context, req *connect.Request[v2.SendEventRequest]) (*connect.Response[v2.SendEventResponse], error) {
+	return c.sendEvent.CallUnary(ctx, req)
 }
 
 // InvokeFunction calls api.v2.V2.InvokeFunction.
@@ -609,15 +1064,45 @@ type V2Handler interface {
 	ListRuns(context.Context, *connect.Request[v2.ListRunsRequest]) (*connect.Response[v2.ListRunsResponse], error)
 	ListFunctionRuns(context.Context, *connect.Request[v2.ListFunctionRunsRequest]) (*connect.Response[v2.ListFunctionRunsResponse], error)
 	GetEventRuns(context.Context, *connect.Request[v2.GetEventRunsRequest]) (*connect.Response[v2.GetEventRunsResponse], error)
+	CreateReplay(context.Context, *connect.Request[v2.CreateReplayRequest]) (*connect.Response[v2.CreateReplayResponse], error)
 	Rerun(context.Context, *connect.Request[v2.RerunRequest]) (*connect.Response[v2.RerunResponse], error)
 	CancelRun(context.Context, *connect.Request[v2.CancelRunRequest]) (*connect.Response[v2.CancelRunResponse], error)
 	GetApp(context.Context, *connect.Request[v2.GetAppRequest]) (*connect.Response[v2.GetAppResponse], error)
 	GetApps(context.Context, *connect.Request[v2.GetAppsRequest]) (*connect.Response[v2.GetAppsResponse], error)
+	CreateBuild(context.Context, *connect.Request[v2.CreateBuildRequest]) (*connect.Response[v2.CreateBuildResponse], error)
+	CommitBuild(context.Context, *connect.Request[v2.CommitBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	GetBuild(context.Context, *connect.Request[v2.GetBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	ListBuilds(context.Context, *connect.Request[v2.ListBuildsRequest]) (*connect.Response[v2.ListBuildsResponse], error)
+	CancelBuild(context.Context, *connect.Request[v2.CancelBuildRequest]) (*connect.Response[v2.BuildResponse], error)
+	CreateSandbox(context.Context, *connect.Request[v2.CreateSandboxRequest]) (*connect.Response[v2.CreateSandboxResponse], error)
+	ListSandboxes(context.Context, *connect.Request[v2.ListSandboxesRequest]) (*connect.Response[v2.ListSandboxesResponse], error)
+	GetSandbox(context.Context, *connect.Request[v2.GetSandboxRequest]) (*connect.Response[v2.GetSandboxResponse], error)
+	DestroySandbox(context.Context, *connect.Request[v2.DestroySandboxRequest]) (*connect.Response[v2.DestroySandboxResponse], error)
+	PauseSandbox(context.Context, *connect.Request[v2.PauseSandboxRequest]) (*connect.Response[v2.PauseSandboxResponse], error)
+	ResumeSandbox(context.Context, *connect.Request[v2.ResumeSandboxRequest]) (*connect.Response[v2.ResumeSandboxResponse], error)
+	CreateSandboxSnapshot(context.Context, *connect.Request[v2.CreateSandboxSnapshotRequest]) (*connect.Response[v2.CreateSandboxSnapshotResponse], error)
+	ListSandboxSnapshots(context.Context, *connect.Request[v2.ListSandboxSnapshotsRequest]) (*connect.Response[v2.ListSandboxSnapshotsResponse], error)
+	GetSandboxSnapshot(context.Context, *connect.Request[v2.GetSandboxSnapshotRequest]) (*connect.Response[v2.GetSandboxSnapshotResponse], error)
+	DeleteSandboxSnapshot(context.Context, *connect.Request[v2.DeleteSandboxSnapshotRequest]) (*connect.Response[v2.DeleteSandboxSnapshotResponse], error)
+	ExecSandbox(context.Context, *connect.Request[v2.ExecSandboxRequest]) (*connect.Response[v2.ExecSandboxResponse], error)
+	StreamSandboxLogs(context.Context, *connect.Request[v2.StreamSandboxLogsRequest], *connect.ServerStream[v2.StreamSandboxLogsResponse]) error
+	WriteSandboxFile(context.Context, *connect.Request[v2.WriteSandboxFileRequest]) (*connect.Response[v2.WriteSandboxFileResponse], error)
+	ReadSandboxFile(context.Context, *connect.Request[v2.ReadSandboxFileRequest], *connect.ServerStream[httpbody.HttpBody]) error
+	StartSandboxProcess(context.Context, *connect.Request[v2.StartSandboxProcessRequest]) (*connect.Response[v2.StartSandboxProcessResponse], error)
+	ListSandboxProcesses(context.Context, *connect.Request[v2.ListSandboxProcessesRequest]) (*connect.Response[v2.ListSandboxProcessesResponse], error)
+	GetSandboxProcess(context.Context, *connect.Request[v2.GetSandboxProcessRequest]) (*connect.Response[v2.GetSandboxProcessResponse], error)
+	SignalSandboxProcess(context.Context, *connect.Request[v2.SignalSandboxProcessRequest]) (*connect.Response[v2.SignalSandboxProcessResponse], error)
+	WaitSandboxProcess(context.Context, *connect.Request[v2.WaitSandboxProcessRequest]) (*connect.Response[v2.WaitSandboxProcessResponse], error)
+	GetSandboxProcessOutput(context.Context, *connect.Request[v2.GetSandboxProcessOutputRequest]) (*connect.Response[v2.GetSandboxProcessOutputResponse], error)
+	StreamSandboxProcessOutput(context.Context, *connect.Request[v2.StreamSandboxProcessOutputRequest], *connect.ServerStream[v2.StreamSandboxProcessOutputResponse]) error
 	CreateScore(context.Context, *connect.Request[v2.CreateScoreRequest]) (*connect.Response[v2.CreateScoreResponse], error)
 	SyncApp(context.Context, *connect.Request[v2.SyncAppRequest]) (*connect.Response[v2.SyncAppResponse], error)
 	GetFunctionTrace(context.Context, *connect.Request[v2.GetFunctionTraceRequest]) (*connect.Response[v2.GetFunctionTraceResponse], error)
 	GetFunction(context.Context, *connect.Request[v2.GetFunctionRequest]) (*connect.Response[v2.GetFunctionResponse], error)
+	PauseFunction(context.Context, *connect.Request[v2.PauseFunctionRequest]) (*connect.Response[v2.PauseFunctionResponse], error)
+	ResumeFunction(context.Context, *connect.Request[v2.ResumeFunctionRequest]) (*connect.Response[v2.ResumeFunctionResponse], error)
 	GetFunctions(context.Context, *connect.Request[v2.GetFunctionsRequest]) (*connect.Response[v2.GetFunctionsResponse], error)
+	SendEvent(context.Context, *connect.Request[v2.SendEventRequest]) (*connect.Response[v2.SendEventResponse], error)
 	InvokeFunction(context.Context, *connect.Request[v2.InvokeFunctionRequest]) (*connect.Response[v2.InvokeFunctionResponse], error)
 	ListInsightsTables(context.Context, *connect.Request[v2.ListInsightsTablesRequest]) (*connect.Response[v2.ListInsightsTablesResponse], error)
 	ListInsightsEventSchemas(context.Context, *connect.Request[v2.ListInsightsEventSchemasRequest]) (*connect.Response[v2.ListInsightsEventSchemasResponse], error)
@@ -733,6 +1218,12 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 		connect.WithSchema(v2Methods.ByName("GetEventRuns")),
 		connect.WithHandlerOptions(opts...),
 	)
+	v2CreateReplayHandler := connect.NewUnaryHandler(
+		V2CreateReplayProcedure,
+		svc.CreateReplay,
+		connect.WithSchema(v2Methods.ByName("CreateReplay")),
+		connect.WithHandlerOptions(opts...),
+	)
 	v2RerunHandler := connect.NewUnaryHandler(
 		V2RerunProcedure,
 		svc.Rerun,
@@ -755,6 +1246,162 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 		V2GetAppsProcedure,
 		svc.GetApps,
 		connect.WithSchema(v2Methods.ByName("GetApps")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2CreateBuildHandler := connect.NewUnaryHandler(
+		V2CreateBuildProcedure,
+		svc.CreateBuild,
+		connect.WithSchema(v2Methods.ByName("CreateBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2CommitBuildHandler := connect.NewUnaryHandler(
+		V2CommitBuildProcedure,
+		svc.CommitBuild,
+		connect.WithSchema(v2Methods.ByName("CommitBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2GetBuildHandler := connect.NewUnaryHandler(
+		V2GetBuildProcedure,
+		svc.GetBuild,
+		connect.WithSchema(v2Methods.ByName("GetBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ListBuildsHandler := connect.NewUnaryHandler(
+		V2ListBuildsProcedure,
+		svc.ListBuilds,
+		connect.WithSchema(v2Methods.ByName("ListBuilds")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2CancelBuildHandler := connect.NewUnaryHandler(
+		V2CancelBuildProcedure,
+		svc.CancelBuild,
+		connect.WithSchema(v2Methods.ByName("CancelBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2CreateSandboxHandler := connect.NewUnaryHandler(
+		V2CreateSandboxProcedure,
+		svc.CreateSandbox,
+		connect.WithSchema(v2Methods.ByName("CreateSandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ListSandboxesHandler := connect.NewUnaryHandler(
+		V2ListSandboxesProcedure,
+		svc.ListSandboxes,
+		connect.WithSchema(v2Methods.ByName("ListSandboxes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2GetSandboxHandler := connect.NewUnaryHandler(
+		V2GetSandboxProcedure,
+		svc.GetSandbox,
+		connect.WithSchema(v2Methods.ByName("GetSandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2DestroySandboxHandler := connect.NewUnaryHandler(
+		V2DestroySandboxProcedure,
+		svc.DestroySandbox,
+		connect.WithSchema(v2Methods.ByName("DestroySandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2PauseSandboxHandler := connect.NewUnaryHandler(
+		V2PauseSandboxProcedure,
+		svc.PauseSandbox,
+		connect.WithSchema(v2Methods.ByName("PauseSandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ResumeSandboxHandler := connect.NewUnaryHandler(
+		V2ResumeSandboxProcedure,
+		svc.ResumeSandbox,
+		connect.WithSchema(v2Methods.ByName("ResumeSandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2CreateSandboxSnapshotHandler := connect.NewUnaryHandler(
+		V2CreateSandboxSnapshotProcedure,
+		svc.CreateSandboxSnapshot,
+		connect.WithSchema(v2Methods.ByName("CreateSandboxSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ListSandboxSnapshotsHandler := connect.NewUnaryHandler(
+		V2ListSandboxSnapshotsProcedure,
+		svc.ListSandboxSnapshots,
+		connect.WithSchema(v2Methods.ByName("ListSandboxSnapshots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2GetSandboxSnapshotHandler := connect.NewUnaryHandler(
+		V2GetSandboxSnapshotProcedure,
+		svc.GetSandboxSnapshot,
+		connect.WithSchema(v2Methods.ByName("GetSandboxSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2DeleteSandboxSnapshotHandler := connect.NewUnaryHandler(
+		V2DeleteSandboxSnapshotProcedure,
+		svc.DeleteSandboxSnapshot,
+		connect.WithSchema(v2Methods.ByName("DeleteSandboxSnapshot")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ExecSandboxHandler := connect.NewUnaryHandler(
+		V2ExecSandboxProcedure,
+		svc.ExecSandbox,
+		connect.WithSchema(v2Methods.ByName("ExecSandbox")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2StreamSandboxLogsHandler := connect.NewServerStreamHandler(
+		V2StreamSandboxLogsProcedure,
+		svc.StreamSandboxLogs,
+		connect.WithSchema(v2Methods.ByName("StreamSandboxLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2WriteSandboxFileHandler := connect.NewUnaryHandler(
+		V2WriteSandboxFileProcedure,
+		svc.WriteSandboxFile,
+		connect.WithSchema(v2Methods.ByName("WriteSandboxFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ReadSandboxFileHandler := connect.NewServerStreamHandler(
+		V2ReadSandboxFileProcedure,
+		svc.ReadSandboxFile,
+		connect.WithSchema(v2Methods.ByName("ReadSandboxFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2StartSandboxProcessHandler := connect.NewUnaryHandler(
+		V2StartSandboxProcessProcedure,
+		svc.StartSandboxProcess,
+		connect.WithSchema(v2Methods.ByName("StartSandboxProcess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ListSandboxProcessesHandler := connect.NewUnaryHandler(
+		V2ListSandboxProcessesProcedure,
+		svc.ListSandboxProcesses,
+		connect.WithSchema(v2Methods.ByName("ListSandboxProcesses")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2GetSandboxProcessHandler := connect.NewUnaryHandler(
+		V2GetSandboxProcessProcedure,
+		svc.GetSandboxProcess,
+		connect.WithSchema(v2Methods.ByName("GetSandboxProcess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2SignalSandboxProcessHandler := connect.NewUnaryHandler(
+		V2SignalSandboxProcessProcedure,
+		svc.SignalSandboxProcess,
+		connect.WithSchema(v2Methods.ByName("SignalSandboxProcess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2WaitSandboxProcessHandler := connect.NewUnaryHandler(
+		V2WaitSandboxProcessProcedure,
+		svc.WaitSandboxProcess,
+		connect.WithSchema(v2Methods.ByName("WaitSandboxProcess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2GetSandboxProcessOutputHandler := connect.NewUnaryHandler(
+		V2GetSandboxProcessOutputProcedure,
+		svc.GetSandboxProcessOutput,
+		connect.WithSchema(v2Methods.ByName("GetSandboxProcessOutput")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2StreamSandboxProcessOutputHandler := connect.NewServerStreamHandler(
+		V2StreamSandboxProcessOutputProcedure,
+		svc.StreamSandboxProcessOutput,
+		connect.WithSchema(v2Methods.ByName("StreamSandboxProcessOutput")),
 		connect.WithHandlerOptions(opts...),
 	)
 	v2CreateScoreHandler := connect.NewUnaryHandler(
@@ -781,10 +1428,28 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 		connect.WithSchema(v2Methods.ByName("GetFunction")),
 		connect.WithHandlerOptions(opts...),
 	)
+	v2PauseFunctionHandler := connect.NewUnaryHandler(
+		V2PauseFunctionProcedure,
+		svc.PauseFunction,
+		connect.WithSchema(v2Methods.ByName("PauseFunction")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2ResumeFunctionHandler := connect.NewUnaryHandler(
+		V2ResumeFunctionProcedure,
+		svc.ResumeFunction,
+		connect.WithSchema(v2Methods.ByName("ResumeFunction")),
+		connect.WithHandlerOptions(opts...),
+	)
 	v2GetFunctionsHandler := connect.NewUnaryHandler(
 		V2GetFunctionsProcedure,
 		svc.GetFunctions,
 		connect.WithSchema(v2Methods.ByName("GetFunctions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	v2SendEventHandler := connect.NewUnaryHandler(
+		V2SendEventProcedure,
+		svc.SendEvent,
+		connect.WithSchema(v2Methods.ByName("SendEvent")),
 		connect.WithHandlerOptions(opts...),
 	)
 	v2InvokeFunctionHandler := connect.NewUnaryHandler(
@@ -881,6 +1546,8 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 			v2ListFunctionRunsHandler.ServeHTTP(w, r)
 		case V2GetEventRunsProcedure:
 			v2GetEventRunsHandler.ServeHTTP(w, r)
+		case V2CreateReplayProcedure:
+			v2CreateReplayHandler.ServeHTTP(w, r)
 		case V2RerunProcedure:
 			v2RerunHandler.ServeHTTP(w, r)
 		case V2CancelRunProcedure:
@@ -889,6 +1556,58 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 			v2GetAppHandler.ServeHTTP(w, r)
 		case V2GetAppsProcedure:
 			v2GetAppsHandler.ServeHTTP(w, r)
+		case V2CreateBuildProcedure:
+			v2CreateBuildHandler.ServeHTTP(w, r)
+		case V2CommitBuildProcedure:
+			v2CommitBuildHandler.ServeHTTP(w, r)
+		case V2GetBuildProcedure:
+			v2GetBuildHandler.ServeHTTP(w, r)
+		case V2ListBuildsProcedure:
+			v2ListBuildsHandler.ServeHTTP(w, r)
+		case V2CancelBuildProcedure:
+			v2CancelBuildHandler.ServeHTTP(w, r)
+		case V2CreateSandboxProcedure:
+			v2CreateSandboxHandler.ServeHTTP(w, r)
+		case V2ListSandboxesProcedure:
+			v2ListSandboxesHandler.ServeHTTP(w, r)
+		case V2GetSandboxProcedure:
+			v2GetSandboxHandler.ServeHTTP(w, r)
+		case V2DestroySandboxProcedure:
+			v2DestroySandboxHandler.ServeHTTP(w, r)
+		case V2PauseSandboxProcedure:
+			v2PauseSandboxHandler.ServeHTTP(w, r)
+		case V2ResumeSandboxProcedure:
+			v2ResumeSandboxHandler.ServeHTTP(w, r)
+		case V2CreateSandboxSnapshotProcedure:
+			v2CreateSandboxSnapshotHandler.ServeHTTP(w, r)
+		case V2ListSandboxSnapshotsProcedure:
+			v2ListSandboxSnapshotsHandler.ServeHTTP(w, r)
+		case V2GetSandboxSnapshotProcedure:
+			v2GetSandboxSnapshotHandler.ServeHTTP(w, r)
+		case V2DeleteSandboxSnapshotProcedure:
+			v2DeleteSandboxSnapshotHandler.ServeHTTP(w, r)
+		case V2ExecSandboxProcedure:
+			v2ExecSandboxHandler.ServeHTTP(w, r)
+		case V2StreamSandboxLogsProcedure:
+			v2StreamSandboxLogsHandler.ServeHTTP(w, r)
+		case V2WriteSandboxFileProcedure:
+			v2WriteSandboxFileHandler.ServeHTTP(w, r)
+		case V2ReadSandboxFileProcedure:
+			v2ReadSandboxFileHandler.ServeHTTP(w, r)
+		case V2StartSandboxProcessProcedure:
+			v2StartSandboxProcessHandler.ServeHTTP(w, r)
+		case V2ListSandboxProcessesProcedure:
+			v2ListSandboxProcessesHandler.ServeHTTP(w, r)
+		case V2GetSandboxProcessProcedure:
+			v2GetSandboxProcessHandler.ServeHTTP(w, r)
+		case V2SignalSandboxProcessProcedure:
+			v2SignalSandboxProcessHandler.ServeHTTP(w, r)
+		case V2WaitSandboxProcessProcedure:
+			v2WaitSandboxProcessHandler.ServeHTTP(w, r)
+		case V2GetSandboxProcessOutputProcedure:
+			v2GetSandboxProcessOutputHandler.ServeHTTP(w, r)
+		case V2StreamSandboxProcessOutputProcedure:
+			v2StreamSandboxProcessOutputHandler.ServeHTTP(w, r)
 		case V2CreateScoreProcedure:
 			v2CreateScoreHandler.ServeHTTP(w, r)
 		case V2SyncAppProcedure:
@@ -897,8 +1616,14 @@ func NewV2Handler(svc V2Handler, opts ...connect.HandlerOption) (string, http.Ha
 			v2GetFunctionTraceHandler.ServeHTTP(w, r)
 		case V2GetFunctionProcedure:
 			v2GetFunctionHandler.ServeHTTP(w, r)
+		case V2PauseFunctionProcedure:
+			v2PauseFunctionHandler.ServeHTTP(w, r)
+		case V2ResumeFunctionProcedure:
+			v2ResumeFunctionHandler.ServeHTTP(w, r)
 		case V2GetFunctionsProcedure:
 			v2GetFunctionsHandler.ServeHTTP(w, r)
+		case V2SendEventProcedure:
+			v2SendEventHandler.ServeHTTP(w, r)
 		case V2InvokeFunctionProcedure:
 			v2InvokeFunctionHandler.ServeHTTP(w, r)
 		case V2ListInsightsTablesProcedure:
@@ -992,6 +1717,10 @@ func (UnimplementedV2Handler) GetEventRuns(context.Context, *connect.Request[v2.
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetEventRuns is not implemented"))
 }
 
+func (UnimplementedV2Handler) CreateReplay(context.Context, *connect.Request[v2.CreateReplayRequest]) (*connect.Response[v2.CreateReplayResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CreateReplay is not implemented"))
+}
+
 func (UnimplementedV2Handler) Rerun(context.Context, *connect.Request[v2.RerunRequest]) (*connect.Response[v2.RerunResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.Rerun is not implemented"))
 }
@@ -1006,6 +1735,110 @@ func (UnimplementedV2Handler) GetApp(context.Context, *connect.Request[v2.GetApp
 
 func (UnimplementedV2Handler) GetApps(context.Context, *connect.Request[v2.GetAppsRequest]) (*connect.Response[v2.GetAppsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetApps is not implemented"))
+}
+
+func (UnimplementedV2Handler) CreateBuild(context.Context, *connect.Request[v2.CreateBuildRequest]) (*connect.Response[v2.CreateBuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CreateBuild is not implemented"))
+}
+
+func (UnimplementedV2Handler) CommitBuild(context.Context, *connect.Request[v2.CommitBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CommitBuild is not implemented"))
+}
+
+func (UnimplementedV2Handler) GetBuild(context.Context, *connect.Request[v2.GetBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetBuild is not implemented"))
+}
+
+func (UnimplementedV2Handler) ListBuilds(context.Context, *connect.Request[v2.ListBuildsRequest]) (*connect.Response[v2.ListBuildsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ListBuilds is not implemented"))
+}
+
+func (UnimplementedV2Handler) CancelBuild(context.Context, *connect.Request[v2.CancelBuildRequest]) (*connect.Response[v2.BuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CancelBuild is not implemented"))
+}
+
+func (UnimplementedV2Handler) CreateSandbox(context.Context, *connect.Request[v2.CreateSandboxRequest]) (*connect.Response[v2.CreateSandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CreateSandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) ListSandboxes(context.Context, *connect.Request[v2.ListSandboxesRequest]) (*connect.Response[v2.ListSandboxesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ListSandboxes is not implemented"))
+}
+
+func (UnimplementedV2Handler) GetSandbox(context.Context, *connect.Request[v2.GetSandboxRequest]) (*connect.Response[v2.GetSandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetSandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) DestroySandbox(context.Context, *connect.Request[v2.DestroySandboxRequest]) (*connect.Response[v2.DestroySandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.DestroySandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) PauseSandbox(context.Context, *connect.Request[v2.PauseSandboxRequest]) (*connect.Response[v2.PauseSandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.PauseSandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) ResumeSandbox(context.Context, *connect.Request[v2.ResumeSandboxRequest]) (*connect.Response[v2.ResumeSandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ResumeSandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) CreateSandboxSnapshot(context.Context, *connect.Request[v2.CreateSandboxSnapshotRequest]) (*connect.Response[v2.CreateSandboxSnapshotResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.CreateSandboxSnapshot is not implemented"))
+}
+
+func (UnimplementedV2Handler) ListSandboxSnapshots(context.Context, *connect.Request[v2.ListSandboxSnapshotsRequest]) (*connect.Response[v2.ListSandboxSnapshotsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ListSandboxSnapshots is not implemented"))
+}
+
+func (UnimplementedV2Handler) GetSandboxSnapshot(context.Context, *connect.Request[v2.GetSandboxSnapshotRequest]) (*connect.Response[v2.GetSandboxSnapshotResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetSandboxSnapshot is not implemented"))
+}
+
+func (UnimplementedV2Handler) DeleteSandboxSnapshot(context.Context, *connect.Request[v2.DeleteSandboxSnapshotRequest]) (*connect.Response[v2.DeleteSandboxSnapshotResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.DeleteSandboxSnapshot is not implemented"))
+}
+
+func (UnimplementedV2Handler) ExecSandbox(context.Context, *connect.Request[v2.ExecSandboxRequest]) (*connect.Response[v2.ExecSandboxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ExecSandbox is not implemented"))
+}
+
+func (UnimplementedV2Handler) StreamSandboxLogs(context.Context, *connect.Request[v2.StreamSandboxLogsRequest], *connect.ServerStream[v2.StreamSandboxLogsResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.StreamSandboxLogs is not implemented"))
+}
+
+func (UnimplementedV2Handler) WriteSandboxFile(context.Context, *connect.Request[v2.WriteSandboxFileRequest]) (*connect.Response[v2.WriteSandboxFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.WriteSandboxFile is not implemented"))
+}
+
+func (UnimplementedV2Handler) ReadSandboxFile(context.Context, *connect.Request[v2.ReadSandboxFileRequest], *connect.ServerStream[httpbody.HttpBody]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ReadSandboxFile is not implemented"))
+}
+
+func (UnimplementedV2Handler) StartSandboxProcess(context.Context, *connect.Request[v2.StartSandboxProcessRequest]) (*connect.Response[v2.StartSandboxProcessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.StartSandboxProcess is not implemented"))
+}
+
+func (UnimplementedV2Handler) ListSandboxProcesses(context.Context, *connect.Request[v2.ListSandboxProcessesRequest]) (*connect.Response[v2.ListSandboxProcessesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ListSandboxProcesses is not implemented"))
+}
+
+func (UnimplementedV2Handler) GetSandboxProcess(context.Context, *connect.Request[v2.GetSandboxProcessRequest]) (*connect.Response[v2.GetSandboxProcessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetSandboxProcess is not implemented"))
+}
+
+func (UnimplementedV2Handler) SignalSandboxProcess(context.Context, *connect.Request[v2.SignalSandboxProcessRequest]) (*connect.Response[v2.SignalSandboxProcessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.SignalSandboxProcess is not implemented"))
+}
+
+func (UnimplementedV2Handler) WaitSandboxProcess(context.Context, *connect.Request[v2.WaitSandboxProcessRequest]) (*connect.Response[v2.WaitSandboxProcessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.WaitSandboxProcess is not implemented"))
+}
+
+func (UnimplementedV2Handler) GetSandboxProcessOutput(context.Context, *connect.Request[v2.GetSandboxProcessOutputRequest]) (*connect.Response[v2.GetSandboxProcessOutputResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetSandboxProcessOutput is not implemented"))
+}
+
+func (UnimplementedV2Handler) StreamSandboxProcessOutput(context.Context, *connect.Request[v2.StreamSandboxProcessOutputRequest], *connect.ServerStream[v2.StreamSandboxProcessOutputResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.StreamSandboxProcessOutput is not implemented"))
 }
 
 func (UnimplementedV2Handler) CreateScore(context.Context, *connect.Request[v2.CreateScoreRequest]) (*connect.Response[v2.CreateScoreResponse], error) {
@@ -1024,8 +1857,20 @@ func (UnimplementedV2Handler) GetFunction(context.Context, *connect.Request[v2.G
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetFunction is not implemented"))
 }
 
+func (UnimplementedV2Handler) PauseFunction(context.Context, *connect.Request[v2.PauseFunctionRequest]) (*connect.Response[v2.PauseFunctionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.PauseFunction is not implemented"))
+}
+
+func (UnimplementedV2Handler) ResumeFunction(context.Context, *connect.Request[v2.ResumeFunctionRequest]) (*connect.Response[v2.ResumeFunctionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.ResumeFunction is not implemented"))
+}
+
 func (UnimplementedV2Handler) GetFunctions(context.Context, *connect.Request[v2.GetFunctionsRequest]) (*connect.Response[v2.GetFunctionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.GetFunctions is not implemented"))
+}
+
+func (UnimplementedV2Handler) SendEvent(context.Context, *connect.Request[v2.SendEventRequest]) (*connect.Response[v2.SendEventResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("api.v2.V2.SendEvent is not implemented"))
 }
 
 func (UnimplementedV2Handler) InvokeFunction(context.Context, *connect.Request[v2.InvokeFunctionRequest]) (*connect.Response[v2.InvokeFunctionResponse], error) {

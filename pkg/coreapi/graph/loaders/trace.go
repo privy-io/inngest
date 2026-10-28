@@ -6,17 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/graph-gophers/dataloader"
 	"github.com/inngest/inngest/pkg/coreapi/graph/models"
 	"github.com/inngest/inngest/pkg/cqrs"
 	"github.com/inngest/inngest/pkg/enums"
-	"github.com/inngest/inngest/pkg/run"
 	"github.com/inngest/inngest/pkg/tracing/meta"
-	rpbv2 "github.com/inngest/inngest/proto/gen/run/v2"
-	"github.com/oklog/ulid/v2"
 )
 
 const (
@@ -45,33 +40,10 @@ func (k *TraceRequestKey) String() string {
 	return fmt.Sprintf("%s:%s", k.TraceID, k.RunID)
 }
 
-type DebugRunRequestKey struct {
-	DebugRunID ulid.ULID
-}
-
-func (k *DebugRunRequestKey) Raw() any {
-	return k
-}
-
-func (k *DebugRunRequestKey) String() string {
-	return k.DebugRunID.String()
-}
-
-type DebugSessionRequestKey struct {
-	DebugSessionID ulid.ULID
-}
-
-func (k *DebugSessionRequestKey) Raw() any {
-	return k
-}
-
-func (k *DebugSessionRequestKey) String() string {
-	return k.DebugSessionID.String()
-}
-
 type traceReader struct {
-	loaders *Loaders
-	reader  cqrs.TraceReader
+	reader cqrs.TraceReader
+
+	convertRunSpanToGQL func(ctx context.Context, span *cqrs.OtelSpan) (*models.RunTraceSpan, error)
 }
 
 // just run id
@@ -114,7 +86,7 @@ func (tr *traceReader) GetRunTrace(ctx context.Context, keys dataloader.Keys) []
 	return results
 }
 
-func (tr *traceReader) opcodeToGQL(op *enums.Opcode) *models.StepOp {
+func opcodeToGQL(op *enums.Opcode) *models.StepOp {
 	if op == nil {
 		return nil
 	}
@@ -143,7 +115,7 @@ func (tr *traceReader) opcodeToGQL(op *enums.Opcode) *models.StepOp {
 	return nil
 }
 
-func (tr *traceReader) stepStatusToGQL(status *enums.StepStatus) *models.RunTraceSpanStatus {
+func stepStatusToGQL(status *enums.StepStatus) *models.RunTraceSpanStatus {
 	if status == nil {
 		return nil
 	}
@@ -175,12 +147,13 @@ func (tr *traceReader) stepStatusToGQL(status *enums.StepStatus) *models.RunTrac
 	return nil
 }
 
-func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelSpan) (*models.RunTraceSpan, error) {
+func convertDynamicRunSpanToGQL(ctx context.Context, span *cqrs.OtelSpan) (*models.RunTraceSpan, error) {
+
 	status := models.RunTraceSpanStatusRunning
 
 	// Make sure we parse dynamic statuses from updates
 	if span.Attributes.DynamicStatus != nil {
-		if gqlStatus := tr.stepStatusToGQL(span.Attributes.DynamicStatus); gqlStatus != nil {
+		if gqlStatus := stepStatusToGQL(span.Attributes.DynamicStatus); gqlStatus != nil {
 			status = *gqlStatus
 		}
 	}
@@ -249,6 +222,14 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 		IsUserland:     isUserland,
 		UserlandSpan:   userlandSpan,
 	}
+	if span.Attributes.CustomConcurrencyKeys != nil {
+		gqlSpan.CustomConcurrencyKeys = *span.Attributes.CustomConcurrencyKeys
+	}
+
+	if span.Attributes.StepSpanPath != nil {
+		gqlSpan.SpanPath = *span.Attributes.StepSpanPath
+	}
+	gqlSpan.Origin = span.Attributes.StepOrigin
 
 	if span.Attributes.SkipReason != nil {
 		reason := span.Attributes.SkipReason.String()
@@ -269,7 +250,7 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 	showSpan := span.Name != meta.SpanNameStepDiscovery
 
 	if span.Attributes.StepOp != nil {
-		gqlSpan.StepOp = tr.opcodeToGQL(span.Attributes.StepOp)
+		gqlSpan.StepOp = opcodeToGQL(span.Attributes.StepOp)
 	}
 
 	if span.Attributes.StepID != nil {
@@ -367,7 +348,7 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 		}
 
 		for i, cs := range span.Children {
-			child, err := tr.convertRunSpanToGQL(ctx, cs)
+			child, err := convertDynamicRunSpanToGQL(ctx, cs)
 			if err != nil {
 				return nil, fmt.Errorf("error converting child span: %w", err)
 			}
@@ -461,6 +442,12 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 					if child.StepID != nil && *child.StepID != "" {
 						gqlSpan.StepID = child.StepID
 					}
+					if child.SpanPath != nil {
+						gqlSpan.SpanPath = child.SpanPath
+					}
+					if child.Origin != nil {
+						gqlSpan.Origin = child.Origin
+					}
 					if child.StepInfo != nil {
 						gqlSpan.StepInfo = child.StepInfo
 					}
@@ -526,6 +513,8 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 				dur := int(gqlSpan.EndedAt.Sub(*gqlSpan.StartedAt).Milliseconds())
 				gqlSpan.Duration = &dur
 			}
+
+			GroupBySpanPath(gqlSpan)
 		}
 
 		isStep := span.Name == meta.SpanNameStep || span.Name == meta.SpanNameStepDiscovery
@@ -597,359 +586,24 @@ func (tr *traceReader) convertRunSpanToGQL(ctx context.Context, span *cqrs.OtelS
 		gqlSpan.EndedAt = nil
 	}
 
-	for _, md := range span.Metadata {
-		gqlSpan.Metadata = append(gqlSpan.Metadata, &models.SpanMetadata{
+	gqlSpan.Metadata = append(gqlSpan.Metadata, spanMetadataToGQL(span.Metadata)...)
+
+	return gqlSpan, nil
+}
+
+// spanMetadataToGQL maps a span's metadata to GQL as-is. Kinds keep whatever
+// prefix the store returned (full on the cqrs path, stripped on DuckDB's), so
+// IsUser is what tells a user kind from an internal one w/ the same name.
+func spanMetadataToGQL(mds []*cqrs.SpanMetadata) []*models.SpanMetadata {
+	out := make([]*models.SpanMetadata, 0, len(mds))
+	for _, md := range mds {
+		out = append(out, &models.SpanMetadata{
 			Kind:      md.Kind,
+			IsUser:    md.IsUser,
 			Scope:     md.Scope,
 			Values:    md.Values,
 			UpdatedAt: md.UpdatedAt,
 		})
 	}
-
-	return gqlSpan, nil
-}
-
-func (tr *traceReader) GetLegacyRunTrace(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-	results := make([]*dataloader.Result, len(keys))
-
-	var wg sync.WaitGroup
-	for i, key := range keys {
-		results[i] = &dataloader.Result{}
-
-		req, ok := key.Raw().(*TraceRequestKey)
-		if !ok {
-			results[i].Error = fmt.Errorf("unexpected type %T", key.Raw())
-			continue
-		}
-
-		wg.Add(1)
-		go func(ctx context.Context, res *dataloader.Result) {
-			defer wg.Done()
-
-			spans, err := tr.reader.GetTraceSpansByRun(ctx, *req.TraceRunIdentifier)
-			if err != nil {
-				res.Error = fmt.Errorf("error retrieving span: %w", err)
-				return
-			}
-			if len(spans) < 1 {
-				return
-			}
-
-			// build tree from spans
-			tree, err := run.NewRunTree(run.RunTreeOpts{
-				AccountID:   req.AccountID,
-				WorkspaceID: req.WorkspaceID,
-				AppID:       req.AppID,
-				FunctionID:  req.FunctionID,
-				RunID:       req.RunID,
-				Spans:       spans,
-			})
-			if err != nil {
-				res.Error = err
-				return
-			}
-
-			// convert the tree to a span tree structure for the API
-			root, err := tree.ToRunSpan(ctx)
-			if err != nil {
-				res.Error = fmt.Errorf("error building run tree: %w", err)
-				return
-			}
-			data, err := convertRunTreeToGQLModel(root)
-			if err != nil {
-				res.Error = fmt.Errorf("error parsing run tree: %w", err)
-				return
-			}
-
-			res.Data = data
-			var primeTree func(context.Context, []*models.RunTraceSpan)
-			primeTree = func(ctx context.Context, tspans []*models.RunTraceSpan) {
-				for _, span := range tspans {
-					if span != nil {
-						if span.SpanID != "" {
-							tr.loaders.RunSpanLoader.Prime(
-								ctx,
-								&SpanRequestKey{
-									TraceRunIdentifier: req.TraceRunIdentifier,
-									SpanID:             span.SpanID,
-								},
-								span,
-							)
-						}
-
-						if len(span.ChildrenSpans) > 0 {
-							primeTree(ctx, span.ChildrenSpans)
-						}
-					}
-				}
-			}
-
-			primeTree(ctx, []*models.RunTraceSpan{data})
-		}(ctx, results[i])
-	}
-
-	wg.Wait()
-
-	return results
-}
-
-func convertUserlandSpan(pb *rpbv2.UserlandSpan) *models.UserlandSpan {
-	if pb == nil {
-		return nil
-	}
-	spanAttrs := string(pb.SpanAttrs)
-	resourceAttrs := string(pb.ResourceAttrs)
-
-	return &models.UserlandSpan{
-		SpanName:      &pb.SpanName,
-		SpanKind:      &pb.SpanKind,
-		ServiceName:   pb.ServiceName,
-		ScopeName:     pb.ScopeName,
-		ScopeVersion:  pb.ScopeVersion,
-		SpanAttrs:     &spanAttrs,
-		ResourceAttrs: &resourceAttrs,
-	}
-}
-
-func convertRunTreeToGQLModel(pb *rpbv2.RunSpan) (*models.RunTraceSpan, error) {
-	var (
-		startedAt *time.Time
-		endedAt   *time.Time
-		stepOp    *models.StepOp
-	)
-
-	if pb.GetStartedAt() != nil {
-		ts := pb.GetStartedAt().AsTime().Truncate(time.Millisecond)
-		startedAt = &ts
-	}
-	if pb.GetEndedAt() != nil {
-		ts := pb.GetEndedAt().AsTime().Truncate(time.Millisecond)
-		endedAt = &ts
-	}
-
-	status := models.RunTraceSpanStatusRunning
-	switch pb.GetStatus() {
-	case rpbv2.SpanStatus_QUEUED, rpbv2.SpanStatus_SCHEDULED:
-		status = models.RunTraceSpanStatusQueued
-	case rpbv2.SpanStatus_RUNNING:
-		status = models.RunTraceSpanStatusRunning
-	case rpbv2.SpanStatus_WAITING:
-		status = models.RunTraceSpanStatusWaiting
-	case rpbv2.SpanStatus_COMPLETED:
-		status = models.RunTraceSpanStatusCompleted
-	case rpbv2.SpanStatus_CANCELLED:
-		status = models.RunTraceSpanStatusCancelled
-	case rpbv2.SpanStatus_FAILED:
-		status = models.RunTraceSpanStatusFailed
-	}
-
-	if pb.StepOp != nil {
-		switch *pb.StepOp {
-		case rpbv2.SpanStepOp_RUN:
-			op := models.StepOpRun
-			stepOp = &op
-		case rpbv2.SpanStepOp_INVOKE:
-			op := models.StepOpInvoke
-			stepOp = &op
-		case rpbv2.SpanStepOp_SLEEP:
-			op := models.StepOpSleep
-			stepOp = &op
-		case rpbv2.SpanStepOp_WAIT_FOR_EVENT:
-			op := models.StepOpWaitForEvent
-			stepOp = &op
-		case rpbv2.SpanStepOp_AI_GATEWAY:
-			op := models.StepOpAiGateway
-			stepOp = &op
-		case rpbv2.SpanStepOp_WAIT_FOR_SIGNAL:
-			op := models.StepOpWaitForSignal
-			stepOp = &op
-		}
-	}
-
-	attempts := int(pb.GetAttempts())
-	duration := int(pb.GetDurationMs())
-
-	var userlandSpan *models.UserlandSpan
-	if pb.GetIsUserland() {
-		userlandSpan = convertUserlandSpan(pb.GetUserlandSpan())
-	}
-
-	span := &models.RunTraceSpan{
-		AppID:          uuid.MustParse(pb.GetAppId()),
-		FunctionID:     uuid.MustParse(pb.GetFunctionId()),
-		TraceID:        pb.GetTraceId(),
-		ParentSpanID:   pb.ParentSpanId,
-		SpanID:         pb.GetSpanId(),
-		RunID:          ulid.MustParse(pb.GetRunId()),
-		IsRoot:         pb.GetIsRoot(),
-		IsUserland:     pb.GetIsUserland(),
-		UserlandSpan:   userlandSpan,
-		Name:           pb.GetName(),
-		Status:         status,
-		Attempts:       &attempts,
-		Duration:       &duration,
-		QueuedAt:       pb.GetQueuedAt().AsTime().Truncate(time.Millisecond),
-		StartedAt:      startedAt,
-		EndedAt:        endedAt,
-		OutputID:       pb.OutputId,
-		StepOp:         stepOp,
-		StepID:         pb.StepId,
-		DebugRunID:     nil, // Not available in legacy protobuf format
-		DebugSessionID: nil, // Not available in legacy protobuf format
-	}
-
-	if pb.GetStepInfo() != nil {
-		// step info
-		switch v := pb.GetStepInfo().GetInfo().(type) {
-		case *rpbv2.StepInfo_Run:
-			span.StepInfo = models.RunStepInfo{
-				Type: v.Run.Type,
-			}
-		case *rpbv2.StepInfo_Sleep:
-			span.StepInfo = models.SleepStepInfo{
-				SleepUntil: v.Sleep.SleepUntil.AsTime(),
-			}
-		case *rpbv2.StepInfo_Wait:
-			wait := v.Wait
-
-			var foundEvtID *ulid.ULID
-			if wait.FoundEventId != nil {
-				if id, err := ulid.Parse(*wait.FoundEventId); err == nil {
-					foundEvtID = &id
-				}
-			}
-
-			span.StepInfo = models.WaitForEventStepInfo{
-				EventName:    wait.EventName,
-				Expression:   wait.Expression,
-				Timeout:      wait.Timeout.AsTime(),
-				FoundEventID: foundEvtID,
-				TimedOut:     wait.TimedOut,
-			}
-		case *rpbv2.StepInfo_Invoke:
-			var (
-				returnEvtID *ulid.ULID
-				runID       *ulid.ULID
-			)
-			invoke := v.Invoke
-
-			if invoke.ReturnEventId != nil {
-				if id, err := ulid.Parse(*invoke.ReturnEventId); err == nil {
-					returnEvtID = &id
-				}
-			}
-			if invoke.RunId != nil {
-				if id, err := ulid.Parse(*invoke.RunId); err == nil {
-					runID = &id
-				}
-			}
-
-			span.StepInfo = models.InvokeStepInfo{
-				TriggeringEventID: ulid.MustParse(invoke.TriggeringEventId),
-				FunctionID:        invoke.FunctionId,
-				Timeout:           invoke.Timeout.AsTime(),
-				ReturnEventID:     returnEvtID,
-				RunID:             runID,
-				TimedOut:          invoke.TimedOut,
-			}
-		case *rpbv2.StepInfo_WaitForSignal:
-			wait := v.WaitForSignal
-
-			span.StepInfo = models.WaitForSignalStepInfo{
-				Signal:   wait.Signal,
-				Timeout:  wait.Timeout.AsTime(),
-				TimedOut: wait.TimedOut,
-			}
-		}
-	}
-
-	// iterate over children recursively
-	if len(pb.Children) > 0 {
-		span.ChildrenSpans = []*models.RunTraceSpan{}
-
-		for _, cp := range pb.Children {
-			cspan, err := convertRunTreeToGQLModel(cp)
-			if err != nil {
-				return nil, err
-			}
-			span.ChildrenSpans = append(span.ChildrenSpans, cspan)
-		}
-
-	}
-
-	return span, nil
-}
-
-type SpanRequestKey struct {
-	*cqrs.TraceRunIdentifier `json:"trident,omitempty"`
-	SpanID                   string `json:"sid"`
-}
-
-func (k *SpanRequestKey) Raw() any {
-	return k
-}
-
-func (k *SpanRequestKey) String() string {
-	return fmt.Sprintf("%s:%s:%s", k.TraceID, k.RunID, k.SpanID)
-}
-
-func (tr *traceReader) GetLegacySpanRun(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-	results := make([]*dataloader.Result, len(keys))
-
-	var wg sync.WaitGroup
-	for i, key := range keys {
-		results[i] = &dataloader.Result{}
-
-		req, ok := key.Raw().(*SpanRequestKey)
-		if !ok {
-			results[i].Error = fmt.Errorf("unexpected type for span %T", key.Raw())
-			continue
-		}
-
-		wg.Add(1)
-		go func(ctx context.Context, res *dataloader.Result) {
-			defer wg.Done()
-
-			// If we're here, we're requested a span ID that wasn't primed by
-			// GetRunTrace. Span IDs can sometimes be virtualized based on the
-			// entire trace, so here we refetch the entire trace for each key and
-			// pick out the spans we need.
-			//
-			// Because this is calling another loader, duplicate requests will
-			// still be filtered out.
-			rootSpan, err := LoadOne[models.RunTraceSpan](
-				ctx,
-				tr.loaders.LegacyRunTraceLoader,
-				&TraceRequestKey{TraceRunIdentifier: req.TraceRunIdentifier},
-			)
-			if err != nil {
-				res.Error = fmt.Errorf("failed to get run trace: %w", err)
-			}
-
-			var findNestedSpan func([]*models.RunTraceSpan) *models.RunTraceSpan
-			findNestedSpan = func(spans []*models.RunTraceSpan) *models.RunTraceSpan {
-				for _, span := range spans {
-					if span == nil {
-						continue
-					}
-					if span.SpanID == req.SpanID {
-						return span
-					}
-
-					if len(span.ChildrenSpans) > 0 {
-						nestedSpan := findNestedSpan(span.ChildrenSpans)
-						if nestedSpan != nil {
-							return nestedSpan
-						}
-					}
-				}
-				return nil
-			}
-
-			res.Data = findNestedSpan([]*models.RunTraceSpan{rootSpan})
-		}(ctx, results[i])
-	}
-
-	wg.Wait()
-	return results
+	return out
 }

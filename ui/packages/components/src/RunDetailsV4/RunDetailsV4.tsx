@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ErrorCard } from '../Error/ErrorCard';
 import type { Run as InitialRunData } from '../RunsPage/types';
 import { useBooleanFlag } from '../SharedContext/useBooleanFlag';
-import { useGetRun } from '../SharedContext/useGetRun';
+import { useGetRun, type GetRunData } from '../SharedContext/useGetRun';
 import { useGetRunLinkage } from '../SharedContext/useGetRunLinkage';
 import { useGetTraceResult } from '../SharedContext/useGetTraceResult';
 import { StatusCell } from '../Table/Cell';
@@ -38,6 +38,7 @@ type Props = {
   pollInterval?: number;
   runID: string;
   orgName?: string;
+  renderRunAction?: (run: GetRunData, standalone: boolean) => React.ReactNode;
   // Hides run actions (rerun/cancel/invoke) for read-only views.
   readOnly?: boolean;
 };
@@ -119,13 +120,13 @@ export const RunDetailsV4 = ({
   initialRunData,
   orgName,
   readOnly,
+  renderRunAction,
 }: Props) => {
   const { booleanFlag } = useBooleanFlag();
   const { value: pollingDisabled, isReady: pollingFlagReady } = booleanFlag(
     'polling-disabled',
     false
   );
-  const { value: tracesPreviewEnabled } = booleanFlag('traces-preview', true, true);
   const { updateDynamicRunData } = useDynamicRunData({ runID });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -215,7 +216,7 @@ export const RunDetailsV4 = ({
     refetch: refetchRun,
   } = useGetRun({
     runID,
-    preview: tracesPreviewEnabled,
+    preview: true,
     refetchInterval: pollInterval,
   });
 
@@ -228,7 +229,7 @@ export const RunDetailsV4 = ({
     refetch: refetchResult,
   } = useGetTraceResult({
     traceID: outputID,
-    preview: tracesPreviewEnabled,
+    preview: true,
     refetchInterval: pollInterval,
     enabled: Boolean(outputID),
   });
@@ -300,9 +301,11 @@ export const RunDetailsV4 = ({
               run={nullishToLazy(runData)}
               runID={runID}
               standalone={standalone}
-              result={resultData}
               isDurableEndpoint={runData?.isDurableEndpoint}
               readOnly={readOnly}
+              additionalAction={
+                !readOnly && runData?.id === runID ? renderRunAction?.(runData, standalone) : null
+              }
             />
             {showError && (
               <ErrorCard
@@ -362,7 +365,6 @@ export const RunDetailsV4 = ({
             <StepInfo
               selectedStep={selectedStep}
               pollInterval={pollInterval}
-              tracesPreviewEnabled={tracesPreviewEnabled}
               isDurableEndpoint={runData?.isDurableEndpoint}
             />
           ) : (

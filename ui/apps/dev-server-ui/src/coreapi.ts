@@ -148,6 +148,16 @@ export const APPS = gql`
       functionCount
       autodiscovered
       method
+      sdkFeatureReadiness {
+        aiMetadataExtraction {
+          ready
+          reason
+        }
+        extendedTraces {
+          ready
+          reason
+        }
+      }
       functions {
         name
         id
@@ -175,6 +185,16 @@ export const GET_APP = gql`
       functionCount
       autodiscovered
       method
+      sdkFeatureReadiness {
+        aiMetadataExtraction {
+          ready
+          reason
+        }
+        extendedTraces {
+          ready
+          reason
+        }
+      }
       functions {
         name
         id
@@ -280,7 +300,6 @@ export const GET_RUNS = gql`
     $timeField: RunsV2OrderByField!
     $functionRunCursor: String = null
     $celQuery: String = null
-    $preview: Boolean = false
     $isDeferred: Boolean = null
   ) {
     runs(
@@ -294,7 +313,6 @@ export const GET_RUNS = gql`
       }
       orderBy: [{ field: $timeField, direction: DESC }]
       after: $functionRunCursor
-      preview: $preview
     ) {
       edges {
         node {
@@ -314,7 +332,6 @@ export const GET_RUNS = gql`
           endedAt
           startedAt
           status
-          hasAI
           isDeferred
           deferredFrom {
             runID
@@ -340,7 +357,6 @@ export const COUNT_RUNS = gql`
     $startTime: Time!
     $status: [FunctionRunStatus!]
     $timeField: RunsV2OrderByField!
-    $preview: Boolean = false
     $isDeferred: Boolean = null
   ) {
     runs(
@@ -351,9 +367,8 @@ export const COUNT_RUNS = gql`
         isDeferred: $isDeferred
       }
       orderBy: [{ field: $timeField, direction: DESC }]
-      preview: $preview
     ) {
-      totalCount(preview: $preview)
+      totalCount
     }
   }
 `;
@@ -381,6 +396,7 @@ export const TRACE_DETAILS_FRAGMENT = gql`
     metadata {
       scope
       kind
+      isUser
       values
       updatedAt
     }
@@ -392,6 +408,8 @@ export const TRACE_DETAILS_FRAGMENT = gql`
     stepID
     stepOp
     stepType
+    groupKind
+    origin
     stepInfo {
       __typename
       ... on InvokeStepInfo {
@@ -428,8 +446,10 @@ export const TRACE_DETAILS_FRAGMENT = gql`
   }
 `;
 
+// Deep enough for three levels of span groups:
+// run → group → group → group → step → attempt → userland → userland.
 export const GET_RUN = gql`
-  query GetRun($runID: String!, $preview: Boolean) {
+  query GetRun($runID: String!) {
     run(runID: $runID) {
       function {
         app {
@@ -441,7 +461,7 @@ export const GET_RUN = gql`
         slug
       }
       status
-      trace(preview: $preview) {
+      trace {
         ...TraceDetails
         childrenSpans {
           ...TraceDetails
@@ -451,12 +471,20 @@ export const GET_RUN = gql`
               ...TraceDetails
               childrenSpans {
                 ...TraceDetails
+                childrenSpans {
+                  ...TraceDetails
+                  childrenSpans {
+                    ...TraceDetails
+                    childrenSpans {
+                      ...TraceDetails
+                    }
+                  }
+                }
               }
             }
           }
         }
       }
-      hasAI
     }
   }
 `;
@@ -697,7 +725,7 @@ export const GET_EVENT_RUNS = gql`
           name
           slug
         }
-        trace(preview: true) {
+        trace {
           skipReason
           skipExistingRunID
         }
@@ -706,45 +734,38 @@ export const GET_EVENT_RUNS = gql`
   }
 `;
 
-export const CREATE_DEBUG_SESSION = gql`
-  mutation CreateDebugSession($input: CreateDebugSessionInput!) {
-    createDebugSession(input: $input) {
-      debugSessionID
-      debugRunID
-    }
-  }
-`;
-
-export const DEBUG_RUN = gql`
-  query GetDebugRun($query: DebugRunQuery!) {
-    debugRun(query: $query) {
-      debugTraces {
-        ...TraceDetails
-        childrenSpans {
-          ...TraceDetails
-          childrenSpans {
-            ...TraceDetails
-            childrenSpans {
-              ...TraceDetails
-            }
+export const EXECUTE_INSIGHTS_QUERY = gql`
+  query ExecuteInsightsQuery($sql: String!) {
+    insights(sql: $sql) {
+      columns {
+        name
+        type
+        pathHints {
+          path {
+            key
+            wildcard
           }
+          hint
         }
       }
-    }
-  }
-`;
-
-export const DEBUG_SESSION = gql`
-  query GetDebugSession($query: DebugSessionQuery!) {
-    debugSession(query: $query) {
-      debugRuns {
-        status
-        queuedAt
-        startedAt
-        endedAt
-        debugRunID
-        tags
-        versions
+      rows
+      info {
+        primaryTable
+        tables
+        limited
+      }
+      diagnostics {
+        start {
+          line
+          column
+        }
+        end {
+          line
+          column
+        }
+        severity
+        code
+        message
       }
     }
   }

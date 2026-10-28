@@ -5,6 +5,9 @@
 
 import type { ReactNode } from 'react';
 
+import type { StepWarning } from './warnings';
+import type { SandboxBarData } from './utils/sandboxes';
+
 // ============================================================================
 // Core Component Types
 // ============================================================================
@@ -44,6 +47,7 @@ export type BarStyleKey =
   | 'step.sleep'
   | 'step.waitForEvent'
   | 'step.invoke'
+  | 'span.group'
   // Timing categories
   | 'timing.inngest' // Queue/delay time (short, gray)
   | 'timing.inngest.queue' // Run queue delay (short, solid gray)
@@ -226,6 +230,28 @@ export interface TimelineBarProps {
     variantWeights?: Record<string, number>;
     functionSlug?: string;
   };
+
+  /** Scores recorded on this span (shows badge with hover card) */
+  scores?: ScoreBadgeData[];
+
+  /** Messages from warning metadata (`inngest.warnings` or `inngest.warning.<code>`) (shows a warning icon beside the name) */
+  warnings?: StepWarning[];
+  /** The sandbox this row ran on (shows an `S1` badge before its name) */
+  sandbox?: SandboxBarData;
+
+  /** A span group's kind, shown as a tag before its name */
+  groupKind?: string;
+
+  /** Draw the row faded: Inngest's own libraries added it and it didn't fail */
+  dimmed?: boolean;
+}
+
+/**
+ * A single score recorded on a span, shown in the score badge hover card.
+ */
+export interface ScoreBadgeData {
+  name: string;
+  value: number | boolean;
 }
 
 /**
@@ -312,6 +338,20 @@ export interface TimelineBarData {
     variantWeights?: Record<string, number>;
     functionSlug?: string;
   };
+
+  /** Scores recorded on this span */
+  scores?: ScoreBadgeData[];
+
+  /** Messages from warning metadata (`inngest.warnings` or `inngest.warning.<code>`) */
+  warnings?: StepWarning[];
+  /** The sandbox this row ran on, from `inngest.sandbox` metadata */
+  sandbox?: SandboxBarData;
+
+  /** A span group's kind, as its caller named it */
+  groupKind?: string;
+
+  /** Draw the row faded: Inngest's own libraries added it and it didn't fail */
+  dimmed?: boolean;
 }
 
 /**

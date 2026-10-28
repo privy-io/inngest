@@ -3,6 +3,8 @@ package resolvers
 // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
 import (
+	"database/sql"
+
 	"github.com/inngest/inngest/pkg/api"
 	"github.com/inngest/inngest/pkg/coreapi/generated"
 	"github.com/inngest/inngest/pkg/cqrs"
@@ -16,10 +18,18 @@ type Resolver struct {
 	Data          cqrs.Manager
 	HistoryReader history_reader.Reader
 	Runner        runner.Runner
-	QueueReader   queue.JobQueueReader
+	QueueReader   queue.RunQueueReader
 	EventHandler  api.EventHandler
 	Executor      execution.Executor
 	ServerKind    string
+
+	// DuckDB is the dual-write DuckDB connection Query.insights
+	// executes against — nil unless --duckdb dual-write started
+	// successfully, matching devserver.go's setupDualWrite. Unlike Data
+	// (which always has a working non-DuckDB implementation to fall back
+	// to), Query.insights has no fallback: a nil DuckDB means the
+	// field errors instead of resolving.
+	DuckDB *sql.DB
 
 	// LocalSigningKey is the key used to sign events for self-hosted services.
 	LocalSigningKey string

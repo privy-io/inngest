@@ -2,6 +2,335 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.49.0] - 2026-10-23
+
+### 🚀 Features
+
+- *(api)* Resume a function via v2 api, cli & mcp (#5054)
+- *(api)* Add function replays to v2 (#5010)
+
+### 🐛 Bug Fixes
+
+- *(cqrs)* Include skipped runs and keep precise paging (#5015)
+- *(api)* Enforce request limits before parsing (#5025)
+- *(dashboard)* Show replay failures and correct skipped counts (#5018)
+
+## [v1.48.0] - 2026-10-22
+
+### 🚀 Features
+
+- *(dashboard)* Add failed run AI debugging handoff (#5061)
+
+### 🐛 Bug Fixes
+
+- *(connect)* Raise gRPC receive limits and stop retrying oversized messages (#5048)
+- *(executor)* Preserve step invokes after execution cap (#5051)
+- *(connect)* Resume requests across executor recovery (#5063)
+- *(connect)* Expire renewed worker capacity reservations (#5062)
+- *(ui)* Upgrade Next and Sharp for image optimizer security (#5070)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.48.0 (#5064)
+
+## [v1.47.0] - 2026-10-21
+
+### 🚀 Features
+
+- *(state)* Persist a run's scheduled_at in run state (#4972)
+- *(dashboard)* Prompt sandbox upgrades on unpaid plans (#4984)
+- *(dashboard)* Make the Insights link more prominent in runs search (#4981)
+- *(api)* Expose generated include selector parsers (#4982)
+- *(api)* Share typed include selectors across run endpoints (#4940)
+- *(api)* Allow naming sandbox snapshots and listing by name (#4985)
+- *(metadata)* Accept per-name score & warning kinds (#4992)
+- *(metadata)* Write all metadata as set (#4993)
+- *(tracing)* Add custom trace spans and groups (#4990)
+- *(tracing)* Show `inngest.warnings` more obviously (#4991)
+- *(api)* Add sandbox image selection contract (#4989)
+- *(api)* Pause a function via v2 api, cli & mcp (#5035)
+
+### 🐛 Bug Fixes
+
+- *(expressions)* Evaluate presence against concrete data (#4971)
+- *(api)* Support camelCase (and snake_case) run include selectors (#4939)
+- *(event)* Reject NUL characters in event names (#4973)
+- *(api)* Set Retry-After on extended-trace cap 429s (#4987)
+- *(executor)* Validate SDK step metadata kinds (#4994)
+- *(executor)* Always retry failed discovery enqueues (#5001)
+- *(executor)* Finalize runs of permanently failed jobs (#5002)
+- *(api)* Handle every event in a batch like Cloud (#5011)
+- *(queue)* Reject singleton conflicts before writing items (#5005)
+- Extend scheduling retry protection past delivery backoff (#5020)
+- *(executor)* Preserve singleton runs on scheduling retries (#5030)
+- *(queue)* Enforce throttling per execution attempt (#5026)
+- *(dashboard)* Use full-width page scrollers below fixed headers (#5027)
+- *(exechttp)* Synchronize HTTP timing during cancellation (#4961)
+- *(state)* Expose idempotency lookup over the state RPC (#5038)
+- *(devserver)* Do not clobber checksum/error on named apps during -u sdk-url startup (#5003)
+- *(httpdriver)* Amend dns lookups with misconfigured AAAA (#5055)
+- *(connect)* Preserve refreshed connections during cleanup (#5060)
+
+### 🚜 Refactor
+
+- *(state)* Return ErrIdempotentResponse from v2 SaveStep (#5008)
+
+### ⚡ Performance
+
+- *(queue)* Look up account priorities concurrently in AccountPeek (#4976)
+- *(constraintapi)* Let a capacity-release wake skip the limiting-constraint cache (#4983)
+
+### 🧪 Testing
+
+- *(batch)* Adding batching tests for valkey 9 (#4980)
+- *(queue)* Isolate capacity lease expiry test lifecycle (#5037)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(api)* Soft-deprecate includeOutput (#4979)
+- *(codeql)* Scan fork pull requests (#5032)
+- *(http)* Improve no route errors (#5056)
+- *(release)* V1.47.0 (#4977)
+
+## [v1.46.0] - 2026-10-06
+
+### 🚀 Features
+
+- *(api)* Add sandbox secret name arrays (#4864)
+- *(queue)* Support pooled role leases (#4896)
+- *(queue)* Support dynamic partition peek limits per shard (#4877)
+- *(dashboard)* Add REST backed run lists (using backend traces v2) (#4890)
+- *(dashboard)* Manage sandbox secrets in the sidebar (#4876)
+- *(tracing)* Include custom concurrency keys in spans (#4915)
+- *(api)* Add async checkpoint routing hook (#4925)
+- *(execution)* Add SyncLifecycleListeners & supporting logic (#4879)
+- *(dashboard)* Add api keys with permissions (#4891)
+- *(queue)* Accept bounded direct item hints (#4918)
+- *(dashboard)* Link progressive searches to Insights (#4949)
+- *(dashboard)* Link Insights resource IDs (#4951)
+- *(dev)* Connect local workflows to Cloud sandboxes (#4886)
+
+### 🐛 Bug Fixes
+
+- *(api)* Preserve run list timestamps (#4887)
+- *(dashboard)* Resolve failed boolean flags to ready on error (#4900)
+- *(ui)* Require registered client feature flags (#4904)
+- *(dashboard)* Fix UI for progressive CEL search status (#4913)
+- *(queue)* Notify shards after capacity release (#4914)
+- *(jank)* Remove code block title scrollbar (#4920)
+- *(dashboard)* Switch function runs from nested route to /v2/runs (#4922)
+- *(mcp)* Document cursor static mcp client config (#4916)
+- *(queue)* Prevent key queue step backlog overcounting (#4937)
+- *(queue)* Guard key queue backlog metric counting against no progress (#4945)
+- *(queue)* Drain archived connect queues (#4950)
+- *(queue)* Preserve hint receivers and in-flight leases (#4948)
+- Page crash locally on refresh because of cjs import (#4678)
+- *(realtime)* Bound publishing and protect authorization tokens (#4944)
+- *(executor)* Retry sleep completion saves (#4960)
+
+### 🚜 Refactor
+
+- *(dashboard)* Omit unused deferred parent run IDs (#4888)
+- *(ui)* Use shared relative time helper (#4919)
+- *(api-docs)* Clean up generation and deployment (#4931)
+
+### ⚡ Performance
+
+- *(queue)* Reduce Redis work during enqueue and dequeue (#4955)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dashboard)* Run Vitest tests and align UI on Node 22 (#4902)
+- *(ci)* Pin GitHub Actions to commit SHAs (#4932)
+- *(dashboard)* Make runs list REST + v2 traces backed only and v2 traces only for every other runs data (#4928)
+- *(queue)* Set Scope.EnvID from Item if Item.Identifier is not available (#4954)
+- *(release)* V1.46.0 (#4889)
+
+### 🛡️ Security
+
+- *(ui)* Bump TanStack Start to 1.168.60 for CVE-2026-102989 (#4956)
+
+## [v1.45.1] - 2026-09-17
+
+### 🐛 Bug Fixes
+
+- *(cli)* Better message when cli is unauthed (#4883)
+- *(queue)* Drop permanently unroutable items (#4878)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.45.1 (#4884)
+
+## [v1.45.0] - 2026-09-17
+
+### 🚀 Features
+
+- *(sandbox)* Accept snapshot ID when creating sandboxes (#4767)
+- *(traces)* Remove preview=false legacy trace path (#4799)
+- *(dashboard)* Add hobby execution limit notices (#4819)
+- *(api)* Reject unmapped v2 request fields via grpc-gateway fork (#4816)
+- *(api)* Support CEL queries in REST run lists (#4858)
+- *(api)* Define sandbox lifecycle contract (#4870)
+- *(queue)* Configure partition peek limit (#4875)
+- *(api)* Add include option for deferred parents (#4874)
+- *(auth)* Add cli oauth login (#4780)
+- *(auth)* Add mcp oauth support (#4781)
+
+### 🐛 Bug Fixes
+
+- *(debounce)* Handle removed config during execution (#4788)
+- *(cqrs)* Close query rows (#2680)
+- *(queue)* Reduce semaphore requeue churn (#4807)
+- *(api)* Serialize sandbox bytes written as a number (#4789)
+- *(semaphores)* Improve semaphore iteration, breaking early, etc (#4818)
+- *(deps)* Remove stale Tencent SDK replacement (#4829)
+- *(cel)* Improve certain classes of cel filter errors (#4832)
+- Preserve newer debounce events during queue item recovery (#4800)
+- *(queue)* Route requeues to current shard (#4844)
+- *(ui)* Update Next.js past critical advisories (#4847)
+- *(queue)* Close migration requeue routing window (#4849)
+- *(api)* Normalize unknown REST v2 body field errors (#4813)
+- *(api)* Return error when event run status lookup fails (#4855)
+- *(components)* NewCodeBlock drag-to-select breaks when a mid-drag resize hits the editor (#4856)
+- *(api)* REST v1 GET requests should keep their error codes (#4857)
+- *(debounce)* Finish source cleanup before execution (#4863)
+- *(ui)* Hide unknown run status filter (#4867)
+- *(api)* Return unknown run statuses accurately (#4868)
+- *(dashboard)* Remove dead run-level AI treatment (#4871)
+- *(rest)* Remove mistakenly added run-level has_ai field (#4872)
+
+### 🚜 Refactor
+
+- *(event-cel)* Remove unused package (#4792)
+- *(debug)* Remove unused/incomplete run debug feature (#4801)
+- *(metadata)* Remove span metadata feature flag (#4820)
+- *(cqrs)* Remove unused span stack reader (#4825)
+- *(cqrs)* Remove legacy trace spans reader (#4826)
+- Use go 1.26 new expressions (#4845)
+- *(queue)* Drop iterator APIs from the queue reader interfaces (#4859)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(metrics)* Remove unused pkg/usage (#4793)
+- *(api)* Add proto permission metadata (#4833)
+- *(release)* V1.45.0 (#4790)
+
+## [v1.44.0] - 2026-08-26
+
+### 🚀 Features
+
+- *(ai)* Add run-level AI usage summary (#4758)
+- *(ui)* Show run AI usage summary (#4759)
+- *(scores)* Show recorded scores on timeline bars (#4736)
+
+### 🐛 Bug Fixes
+
+- *(queue)* Renew capacity leases before dispatch (#4766)
+- *(insights)* Fix broken download with invalid dates (#4769)
+- *(connect)* Track reply delivery outcomes (#4774)
+
+### 🚜 Refactor
+
+- *(connect)* Remove executor ACK RPC (#4751)
+
+### ⚡ Performance
+
+- *(expressions)* Avoid cloning event data per evaluation (#4762)
+- *(batching)* Adding metrics for batching to capture redis memory usage and batch duration (#4763)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update CODEOWNERS (#4771)
+- Remove former owners from CODEOWNERS (#4785)
+- *(release)* V1.44.0 (#4764)
+
+## [v1.43.0] - 2026-08-20
+
+### 🚀 Features
+
+- *(cli)* Add cli user agent for api analytics (#4752)
+- *(dashboard)* Add app filtering to functions table (#4199)
+
+### 🐛 Bug Fixes
+
+- *(ci)* Add --force-with-lease to the Sync Staging workflow push (#4629)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.43.0 (#4756)
+
+## [v1.42.0] - 2026-08-19
+
+### 🚀 Features
+
+- Add SDK feature observations (#4700)
+- *(connect)* Adding support for connect HA (#4714)
+- *(queue)* Let custom scanners declare roles (#4723)
+- *(api)* Add v2 sandbox contracts (#4716)
+- Surface event scheduling in the dashboard (#4720)
+- *(ai metadata)* More robust AI model cost data (#4728)
+- *(improvement)* Add-scores-and-experiments-empty-states-to-dev-server (#4697)
+- *(improvement)* Cloud MCP UI (#4729)
+- *(ui-mcp)* Re-add MCP setup page (#4740)
+- *(mcp)* Restore setup docs with public operations (#4748)
+- *(ui)* Adding a concurrency color in the graph (#4744)
+- *(api)* Add v2 send event endpoint (#4724)
+
+### 🐛 Bug Fixes
+
+- *(traces)* Scope span self-join by run_id (#4718)
+- 64 bit linux download link for install.sh script (#4727)
+- *(queue)* Preserve sentinel shard selection errors (#4726)
+- Revert "feat(improvement): Cloud MCP UI (#4729)" (#4739)
+- *(ui-mcp)* Revert MCP setup page redesign (#4745)
+- *(redis-state)* Tolerate legacy idempotency tombstones (#4747)
+- *(batch)* Propagate timeout scheduling errors so source events retry (#4749)
+- *(traces)* Hide expand/collapse all when there is nothing to toggle (#4737)
+- *(ui)* Adding legend for concurrency limit on hover (#4753)
+- *(queue)* Disable constraint checks when key queues are disabled (#4754)
+
+### 🚜 Refactor
+
+- *(runs)* Remove legacy tokens from run output header (#4721)
+- *(queue)* Split queue reader capabilities (#4743)
+- *(connect)* Remove the async ACK gateway -> executor (#4215)
+
+### 📚 Documentation
+
+- *(api)* Improve v2 app sync and insights docs (#4732)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(queue)* Remove system queue migrations (#4722)
+- *(batch)* Add more context to schedule batch execution (#4742)
+- *(connect)* Adding run id to logs (#4698)
+- *(release)* V1.42.0 (#4715)
+
+## [v1.41.1] - 2026-08-05
+
+### ⚙️ Miscellaneous Tasks
+
+- *(support)* Add graphql-codegen to support app (#4701)
+- *(e2e)* Run more tests on Depot (#4710)
+- *(release)* V1.41.1 (#4707)
+
+## [v1.41.0] - 2026-08-03
+
+### 🚀 Features
+
+- *(ai-overview)* Add insights-backed AI dashboard (#4662)
+- *(ui)* Nudge metadata usage in run details (#4683)
+
+### 🐛 Bug Fixes
+
+- *(connect)* Prevent connection state regression during gateway draining (#4685)
+- *(queue)* Isolate unavailable shards (#4688)
+- *(connect)* Make lease renewal idempotent after lost ACKs (#4687)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.41.0 (#4686)
+
 ## [v1.40.0] - 2026-07-30
 
 ### 🚀 Features
@@ -13,6 +342,10 @@ All notable changes to this project will be documented in this file.
 
 - *(epxressions)* Add support for falsy terns (#4676)
 - *(queue)* Correct reversed errors.Is arguments for ErrQueueItemNotFound (#4679)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* V1.40.0 (#4677)
 
 ## [v1.39.0] - 2026-07-28
 

@@ -21,6 +21,44 @@ jobs:
         os: [depot-ubuntu-22.04-4]
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v2.13.2
+          args: --verbose
+
+  gen:
+    name: 'git state after "make gen protobuf"'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # main
+      - uses: nicknovitski/nix-develop@9be7cfb4b10451d3390a75dc18ad0465bed4932a # v1.2.1
+      - name: 'Check for dirty Git state after running "make gen protobuf"'
+        run: |
+          make gen protobuf
+          git diff
+          git diff --name-only --exit-code
+
+  # The unit test job above runs these packages too, but their DuckDB tests
+  # skip when no duckdb binary/extension is available, so it can pass without
+  # the real stack ever executing. This job installs the pinned binary and
+  # fails if any required smoke test skips.
+  duckdb-smoke:
+    name: "Test / DuckDB smoke (pinned binary, no skips)"
+    runs-on: depot-ubuntu-22.04-4
+    steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
@@ -30,26 +68,21 @@ jobs:
         with:
           go-version-file: ./go.mod
 
-      - name: Lint
-        uses: golangci/golangci-lint-action@v8
+      - name: Cache pinned DuckDB binary and extensions
+        uses: actions/cache@v4
         with:
-          version: v2.11.4
-          args: --verbose
+          path: |
+            ${{ runner.temp }}/duckdb-state/bin
+            ~/.duckdb/extensions
+          key: duckdb-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pkg/duckdb/driver/pinned.go') }}
 
-  gen:
-    name: 'git state after "make gen protobuf"'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: nicknovitski/nix-develop@v1.2.1
-      - name: 'Check for dirty Git state after running "make gen protobuf"'
+      - name: Install pinned DuckDB binary
         run: |
-          make gen protobuf
-          git diff
-          git diff --name-only --exit-code
+          go run ./cmd duckdb download --state-dir "$RUNNER_TEMP/duckdb-state"
+          dirname "$(find "$RUNNER_TEMP/duckdb-state/bin" -type f -name duckdb)" >> "$GITHUB_PATH"
+
+      - name: Smoke
+        run: scripts/duckdb-smoke.sh -race
 
   test-linux-race:
     strategy:
@@ -60,12 +93,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     name: "Test / OS: ${{ matrix.os }}, db: ${{ matrix.database }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: true
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: ./go.mod
 
@@ -75,7 +108,7 @@ jobs:
       - name: Test
         run: |
           gotestsum --junitfile=junit.xml --format=standard-verbose -- \
-            $(find . -iname "*_test.go" | xargs -I {} dirname {} | uniq | grep -v "./tests") \
+            $(find . -iname "*_test.go" | xargs -I {} dirname {} | uniq | grep -v "./tests" | grep -v "./cmd/duckdbbench") \
             -race -count=1 -coverprofile=coverage.txt
         env:
           TEST_MODE: true

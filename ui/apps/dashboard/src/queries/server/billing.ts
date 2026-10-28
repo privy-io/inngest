@@ -85,7 +85,7 @@ export const entitlementUsageDocument = graphql(`
           quantityPer
         }
       }
-      entitlements {
+      entitlements: ents {
         # Disable entitlements here as it queries the usage table as well - see monorepo for now
         #executions {
         # DISABLE USAGE FOR NOW - SEE EXE-1011
@@ -114,8 +114,10 @@ export const entitlementUsageDocument = graphql(`
           limit
         }
         userCount {
-          usage
           limit
+        }
+        usage {
+          userCount
         }
         hipaa {
           enabled
@@ -202,24 +204,20 @@ export const entitlementUsageWithMetricsDocument = graphql(`
           quantityPer
         }
       }
-      entitlements {
+      entitlements: ents {
         executions {
-          usage
           limit
           overageAllowed
         }
         runCount {
-          usage
           limit
           overageAllowed
         }
         stepCount {
-          usage
           limit
           overageAllowed
         }
         concurrency {
-          usage
           limit
         }
         eventSize {
@@ -229,8 +227,14 @@ export const entitlementUsageWithMetricsDocument = graphql(`
           limit
         }
         userCount {
-          usage
           limit
+        }
+        usage {
+          concurrency
+          executions
+          runCount
+          stepCount
+          userCount
         }
         hipaa {
           enabled
@@ -310,7 +314,7 @@ export const currentPlanDocument = graphql(`
         name
         amount
         billingPeriod
-        entitlements {
+        entitlements: ents {
           concurrency {
             limit
           }
@@ -366,7 +370,7 @@ export const currentPlanDocument = graphql(`
           }
         }
       }
-      entitlements {
+      entitlements: ents {
         concurrency {
           limit
         }
@@ -447,12 +451,24 @@ export const plansDocument = graphql(`
   query GetPlans {
     plans {
       id
+      slug
       isLegacy
       isFree
       name
       amount
       billingPeriod
-      entitlements {
+      addons {
+        concurrency {
+          available
+          baseValue
+          maxValue
+          name
+          price
+          purchaseCount
+          quantityPer
+        }
+      }
+      entitlements: ents {
         concurrency {
           limit
         }
@@ -460,6 +476,9 @@ export const plansDocument = graphql(`
           limit
         }
         history {
+          limit
+        }
+        executions {
           limit
         }
         runCount {
@@ -477,24 +496,14 @@ export const plans = createServerFn({
   method: 'GET',
 }).handler(
   async (): Promise<
-    Array<
-      TransformPlanBillingPeriod<NonNullable<GetPlansQuery['plans'][0]> | null>
-    >
+    Array<TransformPlanBillingPeriod<GetPlansQuery['plans'][number]>>
   > => {
     try {
       const res = await graphqlAPI.request<GetPlansQuery>(plansDocument);
-      return res.plans.map((plan) =>
-        plan
-          ? {
-              ...plan,
-              billingPeriod: plan.billingPeriod as string,
-            }
-          : null,
-      ) as Array<
-        TransformPlanBillingPeriod<NonNullable<
-          GetPlansQuery['plans'][0]
-        > | null>
-      >;
+      return res.plans.map((plan) => ({
+        ...plan,
+        billingPeriod: plan.billingPeriod as string,
+      }));
     } catch (error) {
       console.error('Error fetching plans:', error);
       throw new Error('Failed to fetch plans');

@@ -4,6 +4,7 @@ import { useQuery } from 'urql';
 import SimpleLineChart from '@/components/Charts/SimpleLineChart';
 import { useEnvironment } from '@/components/Environments/environment-context';
 import { graphql } from '@/gql';
+import { mergeStepsRunningMetrics } from './mergeStepsRunningMetrics';
 
 const GetStepsRunningDocument = graphql(`
   query GetStepsRunningMetrics(
@@ -68,31 +69,36 @@ export default function StepsRunningChart({
   const running = data?.environment.function?.running.data ?? [];
   const concurrencyLimit =
     data?.environment.function?.concurrencyLimit.data ?? [];
-
-  const maxLength = Math.max(running.length, concurrencyLimit.length);
-
-  const metrics = Array.from({ length: maxLength }).map((_, idx) => ({
-    name: running[idx]?.bucket || concurrencyLimit[idx]?.bucket || '',
-    values: {
-      running: running[idx]?.value ?? 0,
-      concurrencyLimit: Boolean(concurrencyLimit[idx]?.value),
-    },
-  }));
+  const granularity =
+    data?.environment.function?.running.granularity ??
+    data?.environment.function?.concurrencyLimit.granularity ??
+    '1m';
+  // Both responses cover the same requested range, so use either one for the bounds.
+  const rangeStart = data?.environment.function?.running.from ?? startTime;
+  const rangeEnd = data?.environment.function?.running.to ?? endTime;
+  const metrics = mergeStepsRunningMetrics(
+    running,
+    concurrencyLimit,
+    granularity,
+    rangeStart,
+    rangeEnd,
+  );
 
   return (
     <SimpleLineChart
       title="Step Running - Point in Time"
-      desc="The number of steps running for this function at point in time. This data shows the value at the time of instrumentation, and is different from throughput."
+      desc="The number of steps running for this function at point in time. This data shows the value at the time of instrumentation, and is different from throughput. The chart background changes color when the function's concurrency limit is reached."
       data={metrics}
       legend={[
         {
-          name: 'Concurrency Limit',
+          name: 'Concurrency Limit Hit',
           dataKey: 'concurrencyLimit',
           color: colors.amber['500'],
           referenceArea: true,
         },
         { name: 'Running', dataKey: 'running', color: colors.blue['500'] },
       ]}
+      connectNulls
       isLoading={isFetchingMetrics}
       error={metricsError}
     />

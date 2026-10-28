@@ -496,8 +496,17 @@ func (q *queueProcessor) ProcessShadowPartitionBacklog(
 	now := q.Clock().Now()
 	operationIdempotencyKey := fmt.Sprintf("%s-%d", backlog.BacklogID, now.UnixMilli())
 
-	constraintCheckRes, err := q.BacklogRefillConstraintCheck(ctx, shadowPart, backlog, constraints, items, operationIdempotencyKey, now)
+	constraintCheckRes, err := q.BacklogRefillConstraintCheck(ctx, shadowPart, backlog, constraints, items, operationIdempotencyKey, now, enableKeyQueues)
 	if err != nil {
+		if errors.Is(err, constraintapi.ErrConstraintShardNotFound) {
+			for _, item := range items {
+				if dropErr := q.dropPermanentlyUnroutableItem(ctx, *item, err); dropErr != nil {
+					l.ReportError(errors.Join(err, dropErr), "could not drop permanently unroutable backlog item")
+					return nil, enums.QueueConstraintNotLimited, nil
+				}
+			}
+			return nil, enums.QueueConstraintNotLimited, nil
+		}
 		// Do not pass on error further, we want to prevent quitting the queue
 		l.ReportError(err, "could not check constraints for backlogRefill")
 		return nil, enums.QueueConstraintNotLimited, nil

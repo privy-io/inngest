@@ -26,7 +26,6 @@ import (
 	"github.com/inngest/inngest/pkg/tracing"
 	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/util"
-	"github.com/inngest/inngestgo"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -223,6 +222,112 @@ func (e *executor) Finalize(ctx context.Context, opts execution.FinalizeOpts) er
 	return nil
 }
 
+// FinalizePermanentlyFailedRun fails the run of a job that the queue is about
+// to permanently fail.  If the executor didn't already finalize the run there's
+// nothing left in the queue to drive it, so it would otherwise stay Running
+// forever (eg. a system error on the last attempt of a fn w/ retries: 0).
+//
+// This returns an error if the run's state or function couldn't be loaded, in
+// which case the caller must keep the job queued instead of dropping it.  We never finalize w/o
+// the run's events if they still exist, as Finalize deletes state and builds the
+// function finished/failed events (and so failure handlers and invoke results)
+// from them.
+func (e *executor) FinalizePermanentlyFailedRun(ctx context.Context, item queue.Item, resp *state.DriverResponse, jobErr error) error {
+	if resp != nil && resp.Final() {
+		// The executor already finalized the run w/ this response.
+		return nil
+	}
+	if errors.Is(jobErr, state.ErrFunctionCancelled) {
+		return nil
+	}
+	// NOTE: We don't skip based on jobErr being eg. ErrEventNotFound, as the
+	// run's metadata may still exist.  Loading the metadata below decides
+	// whether the run's state is actually gone.
+
+	l := logger.StdlibLogger(ctx)
+	id := sv2.IDFromV1(item.Identifier)
+	retryConf := util.NewRetryConf(util.WithRetryConfRetryableErrors(func(err error) bool {
+		return !isRunStateGone(err)
+	}))
+
+	md, err := util.WithRetry(ctx, "state.LoadMetadata", func(ctx context.Context) (sv2.Metadata, error) {
+		return e.smv2.LoadMetadata(ctx, id)
+	}, retryConf)
+	if isRunStateGone(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("error loading metadata to finalize permanently failed run: %w", err)
+	}
+
+	// Load events before finalizing as Finalize deletes state.
+	evts, err := util.WithRetry(ctx, "state.LoadEvents", func(ctx context.Context) ([]json.RawMessage, error) {
+		return e.smv2.LoadEvents(ctx, id)
+	}, retryConf)
+	if err != nil && !isRunStateGone(err) {
+		return fmt.Errorf("error loading events to finalize permanently failed run: %w", err)
+	}
+	if err != nil {
+		// The metadata exists but the events are gone, so finalizing w/o them is
+		// the best we can do (as Cancel does).
+		l.Warn("finalizing permanently failed run w/o events", "error", err, "run_id", id.RunID)
+	}
+
+	// Resolve the slug while the run's state still exists.  Finalize otherwise
+	// loads the function after deleting state, and if that fails no function
+	// failed event is sent and the job can't be retried.  Runs store the slug
+	// at schedule time, so the loader is only a fallback for older runs.
+	fnSlug := md.Config.FunctionSlug()
+	if fnSlug == "" {
+		fn, err := util.WithRetry(ctx, "LoadFunction", func(ctx context.Context) (*state.ExecutorFunction, error) {
+			return e.fl.LoadFunction(ctx, md.ID.Tenant.EnvID, md.ID.FunctionID)
+		}, util.NewRetryConf())
+		if err != nil {
+			return fmt.Errorf("error loading function to finalize permanently failed run: %w", err)
+		}
+		fnSlug = fn.Function.Slug
+	}
+
+	stdErr := state.StandardError{
+		Name:    state.InngestErrInternal,
+		Message: "The function run failed due to an internal error and could not continue.",
+	}
+	stdErr.Error = stdErr.String()
+	failed := state.DriverResponse{
+		Err:     &stdErr.Name,
+		Output:  stdErr.Serialize(execution.StateErrorKey),
+		NoRetry: true,
+	}
+
+	l.Warn("finalizing permanently failed run", "error", jobErr, "run_id", id.RunID)
+
+	if err := e.Finalize(ctx, execution.FinalizeOpts{
+		Metadata: md,
+		Response: execution.FinalizeResponse{
+			Type:           execution.FinalizeResponseDriver,
+			DriverResponse: failed,
+		},
+		Optional: execution.FinalizeOptional{
+			FnSlug:      fnSlug,
+			InputEvents: evts,
+			Reason:      "permanent-job-failure",
+		},
+	}); err != nil {
+		// State is deleted by this point so retrying the job can't help.
+		l.ReportError(err, "error finalizing permanently failed run")
+	}
+
+	e.RunFunctionFinishedLifecycle(ctx, md, item, evts, failed)
+	return nil
+}
+
+// isRunStateGone returns whether err means the run's state no longer exists.
+func isRunStateGone(err error) bool {
+	return errors.Is(err, state.ErrRunNotFound) ||
+		errors.Is(err, state.ErrEventNotFound) ||
+		errors.Is(err, sv2.ErrMetadataNotFound)
+}
+
 func (e *executor) finalizeMetricTags(ctx context.Context, status enums.StepStatus, opts execution.FinalizeOpts) map[string]any {
 	return map[string]any{
 		"account_plan": e.accountPlanMetricTag(ctx, opts),
@@ -312,12 +417,20 @@ func (e *executor) buildDeferEvents(
 	now := e.now()
 	var events []event.Event
 
+	l := logger.StdlibLogger(ctx).With(
+		"run_id", util.SanitizeLogField(opts.Metadata.ID.RunID.String()),
+	)
+
 	for _, d := range defers {
+		l := l.With(
+			"fn_slug", util.SanitizeLogField(d.FnSlug),
+			"hashed_id", d.HashedID,
+		)
+
 		if err := d.Validate(); err != nil {
-			logger.StdlibLogger(ctx).Error(
+			l.Error(
 				"invalid defer",
 				"error", err,
-				"run_id", opts.Metadata.ID.RunID,
 			)
 			metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
 			continue
@@ -331,11 +444,9 @@ func (e *executor) buildDeferEvents(
 
 		eventID, err := event.DeferEventID(opts.Metadata.ID.RunID, d.HashedID)
 		if err != nil {
-			logger.StdlibLogger(ctx).Error(
+			l.Error(
 				"failed to create defer event ID",
 				"error", err,
-				"hashed_id", d.HashedID,
-				"run_id", opts.Metadata.ID.RunID,
 			)
 			metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
 			continue
@@ -344,10 +455,9 @@ func (e *executor) buildDeferEvents(
 		data := map[string]any{}
 		if len(d.Input) > 0 {
 			if err := json.Unmarshal(d.Input, &data); err != nil {
-				logger.StdlibLogger(ctx).Error(
+				l.Error(
 					"deferred input is not a JSON object",
 					"error", err,
-					"run_id", opts.Metadata.ID.RunID,
 				)
 				metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
 				continue
@@ -368,21 +478,58 @@ func (e *executor) buildDeferEvents(
 			ParentRunID:     opts.Metadata.ID.RunID,
 		}
 		if err := deferredMeta.Validate(); err != nil {
-			logger.StdlibLogger(ctx).Error(
+			l.Error(
 				"invalid deferred event metadata",
 				"error", err,
-				"run_id", opts.Metadata.ID.RunID,
 			)
 			metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
 			continue
 		}
 		data[consts.InngestEventDataPrefix] = deferredMeta
 
+		// Resolve the defer's session layers onto the deferred event.
+		var evtMeta event.EventMeta
+		if len(d.Meta) > 0 {
+			if err := json.Unmarshal(d.Meta, &evtMeta); err != nil {
+				l.Error(
+					"deferred meta is not valid JSON",
+					"error", err,
+				)
+				metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
+				continue
+			}
+		}
+		sessionsMetrics := evtMeta.ResolveSessions()
+		metrics.IncrEventSessionsResolvedCounter(
+			ctx,
+			"defer",
+			sessionsMetrics.Manual,
+			sessionsMetrics.Propagated,
+			sessionsMetrics.Nulling,
+			metrics.CounterOpt{PkgName: pkgName},
+		)
+
+		// Validate the sessions after the merge.
+		//
+		// Failure to validate will drop the event, rather than truncate sessions or
+		// fail the parent run.
+		//
+		// Failures are unexpected as we also validate sessions SDK side.
+		if err := evtMeta.Sessions.Validate(); err != nil {
+			l.Error(
+				"deferred sessions failed validation after merge",
+				"error", err,
+			)
+			metrics.IncrDefersFinalizedCounter(ctx, "invalid", metrics.CounterOpt{PkgName: pkgName})
+			continue
+		}
+
 		events = append(events, event.Event{
 			ID:        eventID.String(),
 			Name:      consts.FnDeferScheduleName,
 			Timestamp: now.UnixMilli(),
 			Data:      data,
+			Meta:      evtMeta,
 		})
 		metrics.IncrDefersFinalizedCounter(ctx, "after_run", metrics.CounterOpt{PkgName: pkgName})
 	}
@@ -428,8 +575,9 @@ func (e *executor) doRemoveRunJobs(ctx context.Context, l logger.Logger, shard q
 	//
 	// XXX: Remove this typecast and normalize queue interface to a single package
 	// Find all items for the current function run.
-	jobs, err := shard.RunJobs(
+	jobs, err := e.queue.RunJobs(
 		ctx,
+		shard.Name(),
 		queue.Scope{
 			AccountID:  opts.Metadata.ID.Tenant.AccountID,
 			EnvID:      opts.Metadata.ID.Tenant.EnvID,
@@ -635,12 +783,12 @@ func apiAttributes(res apiresult.APIResult) *meta.SerializableAttrs {
 	compactHeaders := headers.Compact(headers.Redact(h))
 
 	rawAttrs := meta.NewAttrSet()
-	meta.AddAttr(rawAttrs, meta.Attrs.IsFunctionOutput, inngestgo.Ptr(true))
+	meta.AddAttr(rawAttrs, meta.Attrs.IsFunctionOutput, new(true))
 	meta.AddAttr(rawAttrs, meta.Attrs.ResponseHeaders, &compactHeaders)
 	meta.AddAttr(rawAttrs, meta.Attrs.ResponseStatusCode, &res.StatusCode)
-	meta.AddAttr(rawAttrs, meta.Attrs.ResponseOutputSize, inngestgo.Ptr(len(res.Body)))
+	meta.AddAttr(rawAttrs, meta.Attrs.ResponseOutputSize, new(len(res.Body)))
 	// XXX: We always wrap trace output with {"data":T} or {"error":T} for consistency with steps.
-	meta.AddAttr(rawAttrs, meta.Attrs.StepOutput, inngestgo.Ptr(util.DataWrap([]byte(res.Body))))
+	meta.AddAttr(rawAttrs, meta.Attrs.StepOutput, new(util.DataWrap([]byte(res.Body))))
 
 	return rawAttrs
 }
@@ -648,11 +796,11 @@ func apiAttributes(res apiresult.APIResult) *meta.SerializableAttrs {
 func runCompleteAttrs(gen state.GeneratorOpcode) *meta.SerializableAttrs {
 	rawAttrs := meta.NewAttrSet()
 
-	meta.AddAttr(rawAttrs, meta.Attrs.IsFunctionOutput, inngestgo.Ptr(true))
-	meta.AddAttr(rawAttrs, meta.Attrs.ResponseStatusCode, inngestgo.Ptr(200)) // Must be to have this code.  It's an async fn.
-	meta.AddAttr(rawAttrs, meta.Attrs.ResponseOutputSize, inngestgo.Ptr(len(gen.Data)))
+	meta.AddAttr(rawAttrs, meta.Attrs.IsFunctionOutput, new(true))
+	meta.AddAttr(rawAttrs, meta.Attrs.ResponseStatusCode, new(200)) // Must be to have this code.  It's an async fn.
+	meta.AddAttr(rawAttrs, meta.Attrs.ResponseOutputSize, new(len(gen.Data)))
 	// XXX: We always wrap trace output with {"data":T} or {"error":T} for consistency with steps.
-	meta.AddAttr(rawAttrs, meta.Attrs.StepOutput, inngestgo.Ptr(util.DataWrap(gen.Data)))
+	meta.AddAttr(rawAttrs, meta.Attrs.StepOutput, new(util.DataWrap(gen.Data)))
 
 	rawAttrs = rawAttrs.Merge(tracing.GeneratorAttrs(&gen))
 

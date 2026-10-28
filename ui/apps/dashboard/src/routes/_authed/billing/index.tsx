@@ -9,7 +9,13 @@ import EntitlementListItem from '@/components/Billing/Addons/EntitlementListItem
 import BillingInformation from '@/components/Billing/BillingDetails/BillingInformation';
 import PaymentMethod from '@/components/Billing/BillingDetails/PaymentMethod';
 import { LimitBar, type Data } from '@/components/Billing/LimitBar';
-import { isHobbyFreePlan, isHobbyPlan } from '@/components/Billing/Plans/utils';
+import {
+  displayPlanName,
+  isHobbyFreePlan,
+  isHobbyPlan,
+} from '@/components/Billing/Plans/utils';
+import { usageKind } from '@/components/ExecutionLimit/executionLimit';
+import { useExecutionLimit } from '@/components/ExecutionLimit/useExecutionLimit';
 import { ClientFeatureFlag } from '@/components/FeatureFlags/ClientFeatureFlag';
 import { BillingPaymentStatusBanner } from '@/components/PaymentStatusBanner/BillingPaymentStatusBanner';
 import {
@@ -19,8 +25,14 @@ import {
 } from '@/queries/server/billing';
 import { pathCreator } from '@/utils/urls';
 
-const hasUsageMetrics = (obj: unknown): obj is { usage: number } => {
-  return typeof obj === 'object' && obj !== null && 'usage' in obj;
+const hasUsageMetrics = (usage: {
+  userCount: number;
+}): usage is typeof usage & {
+  executions: number;
+  runCount: number;
+  stepCount: number;
+} => {
+  return 'executions' in usage && 'runCount' in usage && 'stepCount' in usage;
 };
 
 export const Route = createFileRoute('/_authed/billing/')({
@@ -46,26 +58,21 @@ export const Route = createFileRoute('/_authed/billing/')({
     //
     // usageMetricsCacheEnabled is checked inside getEntitlementUsage()
     // we can infer it's enabled if usage data is present
-    const usageMetricsCacheEnabled = hasUsageMetrics(entitlements.stepCount);
+    const usage = entitlements.usage;
+    const usageMetricsCacheEnabled = hasUsageMetrics(usage);
 
     if (usageMetricsCacheEnabled) {
       isCurrentHobbyPlan = isHobbyPlan(currentPlan);
       legacyNoRunsPlan = entitlements.runCount.limit === null;
 
-      const stepUsage = hasUsageMetrics(entitlements.stepCount)
-        ? entitlements.stepCount.usage
-        : 0;
+      const stepUsage = usage.stepCount ?? 0;
       const stepLimit = entitlements.stepCount.limit;
-      const runUsage = hasUsageMetrics(entitlements.runCount)
-        ? entitlements.runCount.usage
-        : 0;
+      const runUsage = usage.runCount ?? 0;
       const runLimit = entitlements.runCount.limit;
 
       const executionsData = (entitlements as Record<string, unknown>)
         .executions;
-      const executionUsage = hasUsageMetrics(executionsData)
-        ? executionsData.usage
-        : 0;
+      const executionUsage = usage.executions ?? 0;
       const executionLimit =
         typeof executionsData === 'object' &&
         executionsData !== null &&
@@ -152,6 +159,7 @@ function BillingComponent() {
     isCurrentHobbyPlan,
     legacyNoRunsPlan,
   } = Route.useLoaderData();
+  const executionLimit = useExecutionLimit();
 
   const refetch = async () => {
     await getCurrentPlan();
@@ -232,7 +240,9 @@ function BillingComponent() {
           <Card.Content>
             <p className="text-muted mb-1">Your plan</p>
             <div className="flex items-center justify-between">
-              <p className="text-basis text-xl">{currentPlan.name}</p>
+              <p className="text-basis text-xl">
+                {displayPlanName(currentPlan.name)}
+              </p>
               <Button
                 appearance="ghost"
                 label="Change plan"
@@ -249,6 +259,11 @@ function BillingComponent() {
                   <LimitBar
                     data={executions}
                     className="mb-6"
+                    kind={
+                      executionLimit?.enhanced
+                        ? usageKind(executionLimit.band)
+                        : undefined
+                    }
                     usageURL={pathCreator.billingUsage({
                       dimension: 'execution',
                     })}
@@ -291,7 +306,7 @@ function BillingComponent() {
               description="Maximum number of users on the account"
               entitlement={{
                 currentValue: entitlements.userCount.limit,
-                displayValue: `${entitlements.userCount.usage} of ${entitlements.userCount.limit} maximum users`,
+                displayValue: `${entitlements.usage.userCount} of ${entitlements.userCount.limit} maximum users`,
               }}
               addon={addons.userCount}
               onChange={refetch}

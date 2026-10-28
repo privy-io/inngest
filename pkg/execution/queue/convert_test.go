@@ -604,7 +604,7 @@ func TestQueueItemFromProtoInvalidIDs(t *testing.T) {
 	_, err = QueueItemFromProto(&pb.QueueItem{
 		FunctionId:  uuid.NewString(),
 		WorkspaceId: uuid.NewString(),
-		LeaseId:     protoStringPtr("not-a-ulid"),
+		LeaseId:     new("not-a-ulid"),
 	})
 	require.ErrorContains(t, err, "queue item lease_id")
 }
@@ -748,17 +748,17 @@ func TestIdentifierFromProtoInvalidIDs(t *testing.T) {
 		},
 		{
 			name:    "batch id",
-			mutate:  func(msg *pb.Identifier) { msg.BatchId = protoStringPtr("bad") },
+			mutate:  func(msg *pb.Identifier) { msg.BatchId = new("bad") },
 			wantErr: "identifier batch_id",
 		},
 		{
 			name:    "original run id",
-			mutate:  func(msg *pb.Identifier) { msg.OriginalRunId = protoStringPtr("bad") },
+			mutate:  func(msg *pb.Identifier) { msg.OriginalRunId = new("bad") },
 			wantErr: "identifier original_run_id",
 		},
 		{
 			name:    "replay id",
-			mutate:  func(msg *pb.Identifier) { msg.ReplayId = protoStringPtr("bad") },
+			mutate:  func(msg *pb.Identifier) { msg.ReplayId = new("bad") },
 			wantErr: "identifier replay_id",
 		},
 		{
@@ -1150,6 +1150,7 @@ func TestProtoConversionFieldCoverage(t *testing.T) {
 	})
 
 	assertCoveredFields(t, reflect.TypeOf(EnqueueOpts{}), fieldCoverage{
+		ignored: map[string]string{"OnEnqueued": "local observer; proxies request and return the finalized item separately"},
 		covered: []string{
 			"PassthroughJobId",
 			"ForceQueueShardName",
@@ -1159,16 +1160,14 @@ func TestProtoConversionFieldCoverage(t *testing.T) {
 	})
 }
 
-// TestQueueProxyVariadicOptionCompatibilityGuard documents that queue-proxy
-// does not serialize Requeue or Dequeue variadic options. This is safe while
-// the option structs are empty; if fields are added, the proxy contract must
-// carry those options explicitly.
+// TestQueueProxyVariadicOptionCompatibilityGuard keeps the variadic options
+// aligned with the queue-proxy request fields that carry them between client
+// and server.
 func TestQueueProxyVariadicOptionCompatibilityGuard(t *testing.T) {
-	require.Equal(t, 0, reflect.TypeOf(RequeueOptions{}).NumField())
-	require.Equal(t, 0, reflect.TypeOf(DequeueOptions{}).NumField())
-
-	assertCoveredFields(t, reflect.TypeOf(RequeueOptions{}), fieldCoverage{covered: []string{}})
-	assertCoveredFields(t, reflect.TypeOf(DequeueOptions{}), fieldCoverage{covered: []string{}})
+	assertCoveredFields(t, reflect.TypeOf(RequeueOptions{}), fieldCoverage{covered: []string{"CapacityLeased"}})
+	assertCoveredFields(t, reflect.TypeOf(DequeueOptions{}), fieldCoverage{covered: []string{"CapacityLeased"}})
+	require.NotNil(t, (&pb.RequeueRequest{}).ProtoReflect().Descriptor().Fields().ByName("capacity_leased"))
+	require.NotNil(t, (&pb.DequeueRequest{}).ProtoReflect().Descriptor().Fields().ByName("capacity_leased"))
 }
 
 func assertItemEqual(t *testing.T, expected, actual Item) {
@@ -1206,10 +1205,6 @@ func assertItemEqual(t *testing.T, expected, actual Item) {
 	require.Equal(t, expected.RunInfo.CapacityLease.LeaseID, actual.RunInfo.CapacityLease.LeaseID)
 	require.Equal(t, expected.RunInfo.CapacityLease.IssuedAtMS, actual.RunInfo.CapacityLease.IssuedAtMS)
 	require.Equal(t, expected.RunInfo.ScavengeCount, actual.RunInfo.ScavengeCount)
-}
-
-func protoStringPtr(value string) *string {
-	return &value
 }
 
 func validIdentifierProto() *pb.Identifier {

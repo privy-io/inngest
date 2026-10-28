@@ -41,12 +41,16 @@ var Attrs = struct {
 	SkipReason          attr[*enums.SkipReason]
 	SkipExistingRunID   attr[*string]
 
+	// Custom step concurrency attributes
+	CustomConcurrencyKeys attr[*[]CustomConcurrencyKey]
+
 	// Durable endpoint attributes
 	IsDurableEndpointRun         attr[*bool]
 	DurableEndpointModeChangedAt attr[*time.Time]
 
 	// Defer attributes
 	DeferChildRunID   attr[*ulid.ULID]
+	DeferEventID      attr[*ulid.ULID]
 	DeferFnSlug       attr[*string]
 	DeferHashedID     attr[*string]
 	DeferParentFnSlug attr[*string]
@@ -86,6 +90,12 @@ var Attrs = struct {
 	StepMaxAttempts  attr[*int]
 	StepCodeLocation attr[*string]
 	StepType         attr[*enums.StepType]
+	// StepSpanPath lists the span groups the step was called in, outermost
+	// first.
+	StepSpanPath attr[*[]SpanPathElement]
+	// StepOrigin is the library that created the step on the user's behalf,
+	// as "<package>@<version>", such as "@inngest/ci@0.1.0".
+	StepOrigin attr[*string]
 	// StepInput is the data that has been explicitly captured as input for a
 	// step. This data may not be stored with the span when it hits a store,
 	// and instead may be removed to be stored separately.
@@ -184,6 +194,7 @@ var Attrs = struct {
 	BatchTimestamp:                     TimeAttr("batch.ts"),
 	CronSchedule:                       StringAttr("cron.schedule"),
 	DeferChildRunID:                    ULIDAttr("defer.child_run_id"),
+	DeferEventID:                       ULIDAttr("defer.event_id"),
 	DeferFnSlug:                        StringAttr("defer.fn_slug"),
 	DeferHashedID:                      StringAttr("defer.hashed_id"),
 	DeferParentFnSlug:                  StringAttr("defer.parent_fn_slug"),
@@ -222,6 +233,7 @@ var Attrs = struct {
 	RunScheduleType:                    TextAttr[enums.ScheduleType]("run.schedule_type"),
 	SkipReason:                         TextAttr[enums.SkipReason]("run.skip_reason"),
 	SkipExistingRunID:                  StringAttr("run.skip_existing_run_id"),
+	CustomConcurrencyKeys:              JsonAttr[[]CustomConcurrencyKey]("concurrency.keys"),
 	StartedAt:                          TimeAttr("started_at"),
 	ScheduledAt:                        TimeAttr("scheduled_at"),
 	StepAttempt:                        IntAttr("step.attempt"),
@@ -243,6 +255,8 @@ var Attrs = struct {
 	StepOutputRef:                      StringAttr("step.output_ref"),
 	StepRunType:                        StringAttr("step.run.type"),
 	StepType:                           TextAttr[enums.StepType]("step.type"),
+	StepSpanPath:                       JsonAttr[[]SpanPathElement]("step.span_path"),
+	StepOrigin:                         StringAttr("step.origin"),
 	ExperimentName:                     StringAttr("inngest.experiment.name"),
 	ExperimentStepID:                   StringAttr("inngest.experiment.step_id"),
 	ExperimentVariant:                  StringAttr("inngest.experiment.variant"),

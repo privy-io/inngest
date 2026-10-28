@@ -59,6 +59,15 @@ export function traceWalk(trace: Trace, fn: (trace: Trace) => void) {
   return walkChildren(trace);
 }
 
+/**
+ * The stepID of the first step in a span group. The API orders a group's
+ * children by queue time, so that is the step the group starts with. A
+ * group's own span ID is virtual, so it can't be rerun.
+ */
+export function firstStepID(trace: Trace): string | undefined {
+  return trace.stepID ?? trace.childrenSpans?.map(firstStepID).find(Boolean) ?? undefined;
+}
+
 export function createSpanWidths({ ended, max, min, queued, started }: SpanTimes): SpanWidths {
   let beforeWidth = queued - min;
   let queuedWidth = (started ?? max) - queued;
@@ -153,6 +162,37 @@ export const formatDuration = (ms: number): string => {
   const hours = Math.floor(ms / 3600000);
   const minutes = Math.floor((ms % 3600000) / 60000);
   return `${hours}h ${minutes}m`;
+};
+
+//
+// The executor pins a run's scheduledAt to be >= queuedAt, so the two differ
+// by a few milliseconds on every run. Only a materially later scheduledAt
+// (e.g. a triggering event with a future `ts`) means the run was deliberately
+// deferred.
+const SCHEDULED_FOR_THRESHOLD_MS = 1_000;
+
+//
+// Returns the time a run was deliberately scheduled to start in the future,
+// or null when the run was scheduled to start immediately.
+export const getScheduledFor = (
+  queuedAt: string,
+  scheduledAt: string | null | undefined
+): Date | null => {
+  if (!scheduledAt) {
+    return null;
+  }
+
+  const queued = new Date(queuedAt);
+  const scheduled = new Date(scheduledAt);
+  if (isNaN(queued.getTime()) || isNaN(scheduled.getTime())) {
+    return null;
+  }
+
+  if (scheduled.getTime() - queued.getTime() <= SCHEDULED_FOR_THRESHOLD_MS) {
+    return null;
+  }
+
+  return scheduled;
 };
 
 export const getSpanName = (name: string) => {

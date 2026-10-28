@@ -282,9 +282,6 @@ func (s *svc) Run(ctx context.Context) error {
 			err = s.handleCron(ctx, item)
 		case queue.KindCronHealthCheck:
 			err = s.handleCronHealthCheck(ctx, item)
-		case queue.KindQueueMigrate:
-			// NOOP:
-			// this kind don't work in the Dev server
 		case queue.KindFunctionPause, queue.KindFunctionUnpause:
 			// NOOP:
 			// Function pausing and unpausing is not implemented in the dev server.
@@ -349,6 +346,14 @@ func (s *svc) handleQueueItem(ctx context.Context, item queue.Item) (bool, error
 		// If the error is not of type response error, we assume the step is
 		// always retryable.
 		if resp == nil || err != nil {
+			if !queue.ShouldRetry(err, item.Attempt, item.GetMaxAttempts()) {
+				// The queue is about to permanently fail this job.
+				if ferr := s.exec.FinalizePermanentlyFailedRun(ctx, item, resp, err); ferr != nil {
+					// Keep the job queued, otherwise nothing is left to drive
+					// the run.  This doesn't use up an attempt.
+					return false, queue.AlwaysRetryError(errors.Join(err, ferr))
+				}
+			}
 			return false, err
 		}
 
@@ -746,8 +751,12 @@ func (s *svc) handleEagerCancelBacklog(ctx context.Context, c cqrs.Cancellation)
 	if err != nil {
 		return fmt.Errorf("error selecting shard for cancellation: %w", err)
 	}
+	backlogOps, ok := shard.(queue.BacklogOperations)
+	if !ok {
+		return fmt.Errorf("queue shard %q does not support backlog reads", shard.Name())
+	}
 
-	items, err := shard.ItemsByBacklog(ctx, c.TargetID, from, c.StartedBefore)
+	items, err := backlogOps.ItemsByBacklog(ctx, c.TargetID, from, c.StartedBefore)
 	if err != nil {
 		return fmt.Errorf("error retrieving backlog iterator: %w", err)
 	}

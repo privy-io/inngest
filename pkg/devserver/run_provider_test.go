@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/inngest/inngest/pkg/execution"
 	sv2 "github.com/inngest/inngest/pkg/execution/state/v2"
 	"github.com/inngest/inngest/pkg/inngest"
+	v2pb "github.com/inngest/inngest/proto/gen/api/v2"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -343,6 +345,68 @@ func TestRunProviderGetRunsResolvesPublicFilters(t *testing.T) {
 	assert.Equal(t, "next-cursor", result.Runs[0].Cursor)
 }
 
+func TestRunProviderGetRunsIncludesDeferredParentContext(t *testing.T) {
+	runID := ulid.Make()
+	secondRunID := ulid.Make()
+	deletedParentRunID := ulid.Make()
+	data := &stubRunProviderDataReader{
+		listedRuns: []*cqrs.TraceRun{
+			{
+				RunID:                   runID.String(),
+				StartedAt:               time.Now().UTC(),
+				Status:                  enums.RunStatusCompleted,
+				IsDeferred:              true,
+				DeferParentFunctionSlug: "parent-function",
+			},
+			{
+				RunID:                   secondRunID.String(),
+				StartedAt:               time.Now().UTC(),
+				Status:                  enums.RunStatusCompleted,
+				IsDeferred:              true,
+				DeferParentFunctionSlug: "parent-function",
+			},
+			{
+				RunID:                   deletedParentRunID.String(),
+				StartedAt:               time.Now().UTC(),
+				Status:                  enums.RunStatusCompleted,
+				IsDeferred:              true,
+				DeferParentFunctionSlug: "deleted-parent",
+			},
+		},
+		functions: []*cqrs.Function{{
+			Slug: "parent-function",
+			Name: "Parent function",
+		}},
+	}
+
+	result, err := (&runProvider{data: data}).GetRuns(t.Context(), apiv2.GetRunsOpts{
+		Limit:   20,
+		Include: []apiv2.RunListInclude{apiv2.RunListIncludeDeferredFrom},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Runs, 3)
+	require.Equal(t, &apiv2.RunDeferredFrom{
+		FunctionSlug: "parent-function",
+		FunctionName: "Parent function",
+	}, result.Runs[0].DeferredFrom)
+	require.Equal(t, &apiv2.RunDeferredFrom{
+		FunctionSlug: "parent-function",
+		FunctionName: "Parent function",
+	}, result.Runs[1].DeferredFrom)
+	require.Equal(t, &apiv2.RunDeferredFrom{
+		FunctionSlug: "deleted-parent",
+	}, result.Runs[2].DeferredFrom)
+	require.Equal(t, [][]string{{"parent-function", "deleted-parent"}}, data.functionSlugQueries)
+
+	result, err = (&runProvider{data: data}).GetRuns(t.Context(), apiv2.GetRunsOpts{Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, result.Runs, 3)
+	for _, run := range result.Runs {
+		require.Nil(t, run.DeferredFrom)
+	}
+	require.Len(t, data.functionSlugQueries, 1)
+}
+
 func TestRunProviderGetRunsSkipsUnknownPublicFilter(t *testing.T) {
 	data := &stubRunProviderDataReader{}
 	provider := &runProvider{data: data}
@@ -355,6 +419,62 @@ func TestRunProviderGetRunsSkipsUnknownPublicFilter(t *testing.T) {
 	require.Empty(t, result.Runs)
 	require.NotNil(t, data.listOpts)
 	assert.Equal(t, []string{"unknown-app"}, data.listOpts.Filter.AppName)
+}
+
+func TestRunProviderGetRunsPassesCEL(t *testing.T) {
+	data := &stubRunProviderDataReader{}
+	provider := &runProvider{data: data}
+
+	_, err := provider.GetRuns(t.Context(), apiv2.GetRunsOpts{
+		Limit: 20,
+		CEL:   `event.data.userId == "123"`,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, `event.data.userId == "123"`, data.listOpts.Filter.CEL)
+}
+
+func TestRunProviderGetRunsPausedFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		statuses []v2pb.FunctionRunStatus
+	}{
+		{
+			name:     "paused only",
+			statuses: []v2pb.FunctionRunStatus{v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED},
+		},
+		{
+			name: "paused with a supported status",
+			statuses: []v2pb.FunctionRunStatus{
+				v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED,
+				v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := &stubRunProviderDataReader{}
+			provider := &runProvider{data: data}
+
+			result, err := provider.GetRuns(t.Context(), apiv2.GetRunsOpts{
+				Limit:  20,
+				Status: tc.statuses,
+			})
+
+			require.Nil(t, result)
+			require.ErrorIs(t, err, apiv2.ErrPausedRunStatusNotSupported)
+			require.Nil(t, data.listOpts)
+		})
+	}
+}
+
+func TestRunProviderGetRunsMapsInvalidCEL(t *testing.T) {
+	data := &stubRunProviderDataReader{listErr: cqrs.ErrInvalidRunExpression}
+	provider := &runProvider{data: data}
+
+	result, err := provider.GetRuns(t.Context(), apiv2.GetRunsOpts{Limit: 20, CEL: "not valid"})
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, apiv2.ErrExpressionInvalid)
 }
 
 func TestCQRSRunTimeField(t *testing.T) {
@@ -381,19 +501,23 @@ func TestCQRSRunTimeField(t *testing.T) {
 }
 
 type stubRunProviderDataReader struct {
-	run        *cqrs.FunctionRun
-	runErr     error
-	fn         *cqrs.Function
-	fnErr      error
-	evt        *cqrs.Event
-	evtErr     error
-	listedRuns []*cqrs.TraceRun
-	listOpts   *cqrs.GetTraceRunOpt
+	run                 *cqrs.FunctionRun
+	runErr              error
+	fn                  *cqrs.Function
+	fnErr               error
+	functions           []*cqrs.Function
+	functionsErr        error
+	functionSlugQueries [][]string
+	evt                 *cqrs.Event
+	evtErr              error
+	listedRuns          []*cqrs.TraceRun
+	listErr             error
+	listOpts            *cqrs.GetTraceRunOpt
 }
 
 func (s *stubRunProviderDataReader) GetRuns(ctx context.Context, opts cqrs.GetTraceRunOpt) ([]*cqrs.TraceRun, error) {
 	s.listOpts = &opts
-	return s.listedRuns, nil
+	return s.listedRuns, s.listErr
 }
 
 func (s *stubRunProviderDataReader) GetSpansByRunID(ctx context.Context, runID ulid.ULID) (*cqrs.OtelSpan, error) {
@@ -412,6 +536,14 @@ func (s *stubRunProviderDataReader) GetFunctionByInternalUUID(ctx context.Contex
 		return nil, s.fnErr
 	}
 	return s.fn, nil
+}
+
+func (s *stubRunProviderDataReader) GetFunctionsBySlugs(ctx context.Context, slugs []string) ([]*cqrs.Function, error) {
+	s.functionSlugQueries = append(s.functionSlugQueries, slices.Clone(slugs))
+	if s.functionsErr != nil {
+		return nil, s.functionsErr
+	}
+	return s.functions, nil
 }
 
 func (s *stubRunProviderDataReader) GetEventByInternalID(ctx context.Context, internalID ulid.ULID) (*cqrs.Event, error) {

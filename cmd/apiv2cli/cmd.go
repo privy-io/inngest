@@ -19,10 +19,12 @@ import (
 	"time"
 	"unicode"
 
+	cliauth "github.com/inngest/inngest/cmd/internal/auth"
 	localconfig "github.com/inngest/inngest/cmd/internal/config"
 	"github.com/inngest/inngest/pkg/api"
 	"github.com/inngest/inngest/pkg/api/tel"
 	"github.com/inngest/inngest/pkg/api/v2/apiv2endpoint"
+	"github.com/inngest/inngest/pkg/inngest/version"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -46,6 +48,7 @@ type endpoint struct {
 	body       string
 	input      protoreflect.MessageDescriptor
 	pathParams []string
+	streaming  bool
 }
 
 func Command() *cli.Command {
@@ -148,12 +151,11 @@ func commonFlags() []cli.Flag {
 			Category: "Auth",
 			Name:     "signing-key",
 			Usage:    "Signing key sent as a Bearer token",
-			Sources:  cli.EnvVars("INNGEST_SIGNING_KEY"),
 		},
 		&cli.StringFlag{
 			Category: "Auth",
 			Name:     "env",
-			Usage:    "Environment name sent as X-Inngest-Env",
+			Usage:    "Environment slug; required for environment-specific requests with all-environment credentials",
 			Sources:  cli.EnvVars("INNGEST_ENV"),
 		},
 		&cli.DurationFlag{
@@ -195,7 +197,21 @@ func endpointArguments(ep endpoint) []cli.Argument {
 
 func endpointFlags(ep endpoint) []cli.Flag {
 	var flags []cli.Flag
-	if ep.body != "" {
+	rawBody := isRawHTTPBodyEndpoint(ep)
+	if rawBody {
+		flags = append(flags,
+			&cli.StringFlag{
+				Category: "Body",
+				Name:     "body",
+				Usage:    "Raw request body.",
+			},
+			&cli.StringFlag{
+				Category: "Body",
+				Name:     "body-file",
+				Usage:    "Path to a raw request body file, or '-' for stdin.",
+			},
+		)
+	} else if ep.body != "" {
 		flags = append(flags,
 			&cli.StringFlag{
 				Category: "Body",
@@ -214,11 +230,14 @@ func endpointFlags(ep endpoint) []cli.Flag {
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
 		name := string(field.Name())
+		if rawBody && name == ep.body {
+			continue
+		}
 		flagName := kebab(name)
 		category := "Query"
 		if slices.Contains(ep.pathParams, name) {
 			category = "Path"
-		} else if ep.body != "" {
+		} else if ep.body != "" && !rawBody {
 			category = "Body"
 		}
 
@@ -245,19 +264,21 @@ func endpointFlags(ep endpoint) []cli.Flag {
 
 func flagForField(category, name string, field protoreflect.FieldDescriptor) cli.Flag {
 	usage := fieldUsage(field)
+	hidden := apiv2endpoint.IsDeprecated(field)
 	if field.IsList() {
 		return &cli.StringSliceFlag{
 			Category: category,
 			Name:     name,
 			Usage:    usage,
+			Hidden:   hidden,
 		}
 	}
 
 	switch field.Kind() {
 	case protoreflect.BoolKind:
-		return &cli.BoolFlag{Category: category, Name: name, Usage: usage}
+		return &cli.BoolFlag{Category: category, Name: name, Usage: usage, Hidden: hidden}
 	default:
-		return &cli.StringFlag{Category: category, Name: name, Usage: usage}
+		return &cli.StringFlag{Category: category, Name: name, Usage: usage, Hidden: hidden}
 	}
 }
 
@@ -284,6 +305,7 @@ func discoverEndpoints() []endpoint {
 			body:       discovered.Body,
 			input:      discovered.Input,
 			pathParams: discovered.PathParams,
+			streaming:  discovered.ServerStreaming,
 		})
 	}
 
@@ -329,7 +351,7 @@ func endpointDescription(ep endpoint) string {
 		"  --api-host, --api-port  Target a custom API server; host may include /api/v2 or /v2",
 		"  --api-key               API key, or INNGEST_API_KEY",
 		"  --signing-key           Signing key, or INNGEST_SIGNING_KEY",
-		"  --env                   Environment name, or INNGEST_ENV",
+		"  --env                   Environment slug or INNGEST_ENV; required for environment-specific requests with all-environment credentials",
 		"  --raw                   Print the response body without formatting",
 		"",
 		"Authentication: https://api-docs.inngest.com/authentication",
@@ -352,7 +374,11 @@ func callEndpoint(ctx context.Context, cmd *cli.Command, ep endpoint) error {
 		return err
 	}
 
-	client := &http.Client{Timeout: cmd.Duration("timeout")}
+	timeout := cmd.Duration("timeout")
+	if ep.streaming && !cmd.IsSet("timeout") {
+		timeout = 0
+	}
+	client := &http.Client{Timeout: timeout, CheckRedirect: checkAPIRedirect}
 	resp, err := client.Do(req)
 	if err != nil {
 		if req.URL.Scheme+"://"+req.URL.Host == defaultDevServerOrigin {
@@ -362,21 +388,35 @@ func callEndpoint(ctx context.Context, cmd *cli.Command, ep endpoint) error {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
-	if err != nil {
-		return err
-	}
-	if int64(len(body)) > maxResponseBytes {
-		return fmt.Errorf("response body exceeded %d bytes", maxResponseBytes)
-	}
-
 	if resp.StatusCode >= http.StatusBadRequest {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+		if err != nil {
+			return err
+		}
+		if int64(len(body)) > maxResponseBytes {
+			return fmt.Errorf("response body exceeded %d bytes", maxResponseBytes)
+		}
+		if resp.StatusCode == http.StatusUnauthorized && req.Header.Get("Authorization") == "" {
+			return errors.New("Authentication required. Log into Inngest Cloud with:\n\ninngest login\n\nor\n\nnpx inngest-cli@latest login\n\nor provide an API key\n")
+		}
 		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
 	writer := cmd.Root().Writer
 	if writer == nil {
 		writer = os.Stdout
+	}
+	if ep.streaming {
+		_, err = io.Copy(writer, resp.Body)
+		return err
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(body)) > maxResponseBytes {
+		return fmt.Errorf("response body exceeded %d bytes", maxResponseBytes)
 	}
 
 	if cmd.Bool("raw") {
@@ -411,11 +451,6 @@ func buildRequest(ctx context.Context, cmd *cli.Command, ep endpoint) (*http.Req
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + path
 
-	body, err := requestBody(cmd, ep)
-	if err != nil {
-		return nil, err
-	}
-
 	query, err := queryParams(cmd, ep)
 	if err != nil {
 		return nil, err
@@ -423,7 +458,15 @@ func buildRequest(ctx context.Context, cmd *cli.Command, ep endpoint) (*http.Req
 	u.RawQuery = query.Encode()
 
 	var reader io.Reader
-	if body != nil {
+	rawBody := isRawHTTPBodyEndpoint(ep)
+	if rawBody {
+		reader, err = rawHTTPRequestBody(cmd)
+		if err != nil {
+			return nil, err
+		}
+	} else if body, err := requestBody(cmd, ep); err != nil {
+		return nil, err
+	} else if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
@@ -435,12 +478,15 @@ func buildRequest(ctx context.Context, cmd *cli.Command, ep endpoint) (*http.Req
 	if err != nil {
 		return nil, err
 	}
-	if body != nil {
+	if rawBody {
+		req.Header.Set("Content-Type", "application/octet-stream")
+	} else if reader != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "inngest-cli/"+version.Version)
 
-	if token, err := authToken(cmd); err != nil {
+	if token, err := authToken(ctx, cmd, baseURL); err != nil {
 		return nil, err
 	} else if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -457,7 +503,14 @@ func buildRequest(ctx context.Context, cmd *cli.Command, ep endpoint) (*http.Req
 	return req, nil
 }
 
-// don't ship credentials to a non-local host over http
+func checkAPIRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return guardPlaintextAuth(req)
+}
+
+// never send credentials over remote http
 func guardPlaintextAuth(req *http.Request) error {
 	if req.Header.Get("Authorization") == "" {
 		return nil
@@ -599,7 +652,7 @@ func pathParamValue(cmd *cli.Command, _ endpoint, name string) (string, bool) {
 
 func queryParams(cmd *cli.Command, ep endpoint) (url.Values, error) {
 	values := url.Values{}
-	if ep.body != "" {
+	if ep.body != "" && !isRawHTTPBodyEndpoint(ep) {
 		return values, nil
 	}
 
@@ -607,7 +660,7 @@ func queryParams(cmd *cli.Command, ep endpoint) (url.Values, error) {
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
 		name := string(field.Name())
-		if slices.Contains(ep.pathParams, name) {
+		if slices.Contains(ep.pathParams, name) || name == ep.body {
 			continue
 		}
 
@@ -625,6 +678,35 @@ func queryParams(cmd *cli.Command, ep endpoint) (url.Values, error) {
 	}
 
 	return values, nil
+}
+
+func isRawHTTPBodyEndpoint(ep endpoint) bool {
+	if ep.body == "" || ep.body == "*" {
+		return false
+	}
+	field := ep.input.Fields().ByName(protoreflect.Name(ep.body))
+	return field != nil && field.Message() != nil && field.Message().FullName() == "google.api.HttpBody"
+}
+
+func rawHTTPRequestBody(cmd *cli.Command) (io.Reader, error) {
+	if cmd.IsSet("body") && cmd.IsSet("body-file") {
+		return nil, errors.New("--body and --body-file cannot both be set")
+	}
+	if cmd.IsSet("body") {
+		return strings.NewReader(cmd.String("body")), nil
+	}
+	if !cmd.IsSet("body-file") {
+		return nil, errors.New("missing --body or --body-file")
+	}
+	path := cmd.String("body-file")
+	if path == "-" {
+		reader := cmd.Root().Reader
+		if reader == nil {
+			reader = os.Stdin
+		}
+		return reader, nil
+	}
+	return os.Open(path)
 }
 
 func requestBody(cmd *cli.Command, ep endpoint) (map[string]any, error) {
@@ -820,11 +902,23 @@ func parseTimestamp(value string) (string, error) {
 	return value, nil
 }
 
-func authToken(cmd *cli.Command) (string, error) {
+func authToken(ctx context.Context, cmd *cli.Command, resource string) (string, error) {
 	if apiKey := cmd.String("api-key"); apiKey != "" {
 		return apiKey, nil
 	}
-	return cmd.String("signing-key"), nil
+	// an explicit key overrides the stored login
+	if signingKey := cmd.String("signing-key"); signingKey != "" {
+		return signingKey, nil
+	}
+	manager, err := cliauth.NewManager()
+	if err != nil {
+		return "", err
+	}
+	token, _, err := manager.AccessToken(ctx, resource)
+	if errors.Is(err, cliauth.ErrNotLoggedIn) {
+		return os.Getenv("INNGEST_SIGNING_KEY"), nil
+	}
+	return token, err
 }
 
 func addQueryValue(values url.Values, key string, value any) {

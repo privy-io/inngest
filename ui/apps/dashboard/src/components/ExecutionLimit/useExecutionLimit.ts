@@ -1,0 +1,120 @@
+import { useBooleanFlag } from '@/components/FeatureFlags/hooks';
+import { graphql } from '@/gql';
+import { Marketplace } from '@/gql/graphql';
+import { pathCreator } from '@/utils/urls';
+import { useSkippableGraphQLQuery } from '@/utils/useGraphQLQuery';
+
+import {
+  isCapHit,
+  legacyExecutionCap,
+  usageBand,
+  type UsageBand,
+} from './executionLimit';
+
+const executionLimitQuery = graphql(`
+  query ExecutionLimitCheck {
+    account {
+      id
+      marketplaceBillingURL
+      plan {
+        id
+        name
+      }
+      entitlements: ents {
+        executions {
+          limit
+          overageAllowed
+        }
+        usage {
+          executions
+        }
+      }
+    }
+  }
+`);
+
+const executionCapQuery = graphql(`
+  query ExecutionCapCheck {
+    account {
+      id
+      marketplace
+      marketplaceBillingURL
+      executionCap {
+        usage
+        limit
+        enforced
+        exceeded
+      }
+    }
+  }
+`);
+
+type ExecutionLimitData = {
+  accountID: string;
+  band: UsageBand;
+  isCapHit: boolean;
+  usage: number;
+  limit: number;
+  isVercel: boolean;
+  marketplaceBillingURL: string | null;
+  enhanced: boolean;
+};
+
+export function useExecutionLimit(): ExecutionLimitData | null {
+  const { value: enhancedEnabled, isReady } = useBooleanFlag(
+    'hobby-execution-limit-ui',
+  );
+  const enhanced = isReady && enhancedEnabled;
+
+  const legacyRes = useSkippableGraphQLQuery({
+    query: executionLimitQuery,
+    variables: {},
+    skip: !isReady || enhanced,
+  });
+  const capRes = useSkippableGraphQLQuery({
+    query: executionCapQuery,
+    variables: {},
+    skip: !isReady || !enhanced,
+  });
+
+  const account = enhanced ? capRes.data?.account : legacyRes.data?.account;
+  if (!account) return null;
+
+  const cap =
+    'executionCap' in account
+      ? account.executionCap
+      : legacyExecutionCap({
+          ...account.entitlements.executions,
+          usage: account.entitlements.usage.executions,
+        });
+  if (!cap) return null;
+
+  const isEnterprise =
+    'plan' in account &&
+    (account.plan?.name ?? '').toLowerCase().includes('enterprise');
+  const capHit = !isEnterprise && isCapHit(cap);
+
+  return {
+    accountID: account.id,
+    band: usageBand({ usage: cap.usage, limit: cap.limit, capHit }),
+    isCapHit: capHit,
+    usage: cap.usage,
+    limit: cap.limit,
+    isVercel:
+      'marketplace' in account && account.marketplace === Marketplace.Vercel,
+    marketplaceBillingURL: account.marketplaceBillingURL ?? null,
+    enhanced,
+  };
+}
+
+// Marketplace-billed accounts are bounced from every /billing route but usage,
+// so they upgrade on their provider's page. Both branches must travel as `to`:
+// TanStack's useLinkProps overwrites `href` with a location it builds itself.
+export function upgradeLinkProps(
+  marketplaceBillingURL: string | null,
+  ref: string,
+) {
+  return {
+    to: marketplaceBillingURL ?? pathCreator.billing({ tab: 'plans', ref }),
+  };
+}

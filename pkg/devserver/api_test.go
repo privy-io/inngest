@@ -25,10 +25,12 @@ import (
 	"github.com/inngest/inngest/pkg/inngest"
 	"github.com/inngest/inngest/pkg/logger"
 	"github.com/inngest/inngest/pkg/publicerr"
+	"github.com/inngest/inngest/pkg/registration"
 	"github.com/inngest/inngest/pkg/sdk"
 	"github.com/inngest/inngest/pkg/util"
-	"github.com/inngest/inngestgo"
+	sdkfeatureobs "github.com/inngest/inngest/proto/gen/sdk_feature_observations/v1"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
 
 type capturingCronSyncer struct {
@@ -134,6 +136,143 @@ func TestRegister_FunctionVersionIncrement(t *testing.T) {
 		}
 	})
 
+	t.Run("stores AI metadata extraction readiness from feature observations", func(t *testing.T) {
+		ds := newTestDevServer(t)
+		api := &devapi{
+			devserver: ds,
+		}
+
+		observedReq := req
+		observedReq.FeatureObservations = sdk.FeatureObservationsFromProto(&sdkfeatureobs.FeatureObservations{
+			AiMetadataExtraction: &sdkfeatureobs.AIMetadataExtraction{
+				ReadinessReason: sdkfeatureobs.AIMetadataExtractionReadinessReason_AI_METADATA_EXTRACTION_READINESS_REASON_OTEL_PROVIDER_MISSING,
+				OtelSetup: &sdkfeatureobs.OTelSetup{
+					ProviderSource: sdkfeatureobs.OTelProviderSource_OTEL_PROVIDER_SOURCE_FIRST_PARTY,
+				},
+			},
+		})
+
+		_, err := api.register(ctx, observedReq)
+		require.NoError(t, err)
+
+		app, err := ds.Data.GetAppByName(ctx, consts.DevServerEnvID, observedReq.AppName)
+		require.NoError(t, err)
+		require.Len(t, app.Metadata, 1)
+		requireFeatureObservationsJSON(t, app.Metadata,
+			`{"aiMetadataExtraction":{"readinessReason":3,"otelSetup":{"providerSource":1}}}`,
+		)
+
+		updatedReq := observedReq
+		updatedReq.FeatureObservations.GetAiMetadataExtraction().ReadinessReason = sdkfeatureobs.AIMetadataExtractionReadinessReason_AI_METADATA_EXTRACTION_READINESS_REASON_READY
+
+		_, err = api.register(ctx, updatedReq)
+		require.NoError(t, err)
+
+		app, err = ds.Data.GetAppByName(ctx, consts.DevServerEnvID, observedReq.AppName)
+		require.NoError(t, err)
+		requireFeatureObservationsJSON(t, app.Metadata,
+			`{"aiMetadataExtraction":{"readinessReason":1,"otelSetup":{"providerSource":1}}}`,
+		)
+
+		fnVersions := getFunctionIDandVersion(t, ds, observedReq.AppName)
+		require.Len(t, fnVersions, 1)
+		for _, fnVersion := range fnVersions {
+			require.Equal(t, 1, fnVersion)
+		}
+	})
+
+	t.Run("updates feature observations on duplicate checksum without syncing functions", func(t *testing.T) {
+		r := require.New(t)
+
+		ds := newTestDevServer(t)
+		api := &devapi{
+			devserver: ds,
+		}
+
+		checksumReq := req
+		sum, err := checksumReq.Checksum()
+		r.NoError(err)
+
+		appID := inngest.DeterministicAppUUID(req.AppName)
+		_, err = ds.Data.UpsertApp(ctx, cqrs.UpsertAppParams{
+			ID:          appID,
+			Name:        req.AppName,
+			SdkLanguage: req.SDKLanguage(),
+			SdkVersion:  req.SDKVersion(),
+			Checksum:    sum,
+			Url:         req.URL,
+			Method:      enums.AppMethodServe.String(),
+			Metadata:    "{}",
+		})
+		r.NoError(err)
+
+		observedReq := req
+		observedReq.FeatureObservations = sdk.FeatureObservationsFromProto(&sdkfeatureobs.FeatureObservations{
+			AiMetadataExtraction: &sdkfeatureobs.AIMetadataExtraction{
+				ReadinessReason: sdkfeatureobs.AIMetadataExtractionReadinessReason_AI_METADATA_EXTRACTION_READINESS_REASON_READY,
+			},
+		})
+
+		_, err = api.register(ctx, observedReq)
+		r.NoError(err)
+
+		app, err := ds.Data.GetAppByName(ctx, consts.DevServerEnvID, observedReq.AppName)
+		r.NoError(err)
+		r.Len(app.Metadata, 1)
+		requireFeatureObservationsJSON(t, app.Metadata,
+			`{"aiMetadataExtraction":{"readinessReason":1}}`,
+		)
+
+		fns, err := ds.Data.GetFunctionsByAppInternalID(ctx, appID)
+		r.NoError(err)
+		r.Empty(fns)
+	})
+
+	t.Run("stores Extended Traces readiness from feature observations", func(t *testing.T) {
+		ds := newTestDevServer(t)
+		api := &devapi{
+			devserver: ds,
+		}
+
+		observedReq := req
+		observedReq.FeatureObservations = sdk.FeatureObservationsFromProto(&sdkfeatureobs.FeatureObservations{
+			ExtendedTraces: &sdkfeatureobs.ExtendedTraces{
+				ReadinessReason: sdkfeatureobs.ExtendedTracesReadinessReason_EXTENDED_TRACES_READINESS_REASON_OTEL_PROVIDER_MISSING,
+				OtelSetup: &sdkfeatureobs.OTelSetup{
+					ProviderSource: sdkfeatureobs.OTelProviderSource_OTEL_PROVIDER_SOURCE_USER_PROVIDED,
+				},
+			},
+		})
+
+		_, err := api.register(ctx, observedReq)
+		require.NoError(t, err)
+
+		app, err := ds.Data.GetAppByName(ctx, consts.DevServerEnvID, observedReq.AppName)
+		require.NoError(t, err)
+		require.Len(t, app.Metadata, 1)
+		requireFeatureObservationsJSON(t, app.Metadata,
+			`{"extendedTraces":{"readinessReason":4,"otelSetup":{"providerSource":2}}}`,
+		)
+
+		updatedReq := observedReq
+		updatedReq.FeatureObservations.GetExtendedTraces().ReadinessReason = sdkfeatureobs.ExtendedTracesReadinessReason_EXTENDED_TRACES_READINESS_REASON_READY
+
+		_, err = api.register(ctx, updatedReq)
+		require.NoError(t, err)
+
+		app, err = ds.Data.GetAppByName(ctx, consts.DevServerEnvID, observedReq.AppName)
+		require.NoError(t, err)
+		requireFeatureObservationsJSON(t, app.Metadata,
+			`{"extendedTraces":{"readinessReason":1,"otelSetup":{"providerSource":2}}}`,
+		)
+
+		fnVersions := getFunctionIDandVersion(t, ds, observedReq.AppName)
+		require.Len(t, fnVersions, 1)
+		for _, fnVersion := range fnVersions {
+			require.Equal(t, 1, fnVersion)
+		}
+	})
+
 	t.Run("re-registering same app config does not increment version", func(t *testing.T) {
 		// Create a test devserver with in-memory data store
 		ds := newTestDevServer(t)
@@ -177,7 +316,7 @@ func TestRegister_FunctionVersionIncrement(t *testing.T) {
 
 			// change function config in each iteration
 			sdkFunction1.Timeouts = &inngest.Timeouts{
-				Start: inngestgo.StrPtr(fmt.Sprintf("%dm", i)),
+				Start: new(fmt.Sprintf("%dm", i)),
 			}
 			req.Functions[0] = sdkFunction1
 
@@ -258,7 +397,7 @@ func TestRegister_FunctionVersionIncrement(t *testing.T) {
 
 		// update fn config for sdkFunction1
 		sdkFunction1.Timeouts = &inngest.Timeouts{
-			Start: inngestgo.StrPtr("2m"),
+			Start: new("2m"),
 		}
 		req.Functions[0] = sdkFunction1
 
@@ -533,6 +672,66 @@ func TestDevEndpoint_ReturnsInfoInDevMode(t *testing.T) {
 	var info InfoResponse
 	err := json.Unmarshal(w.Body.Bytes(), &info)
 	require.NoError(t, err)
+}
+
+func TestDevEndpoint_DuckdbInsightsFlagReflectsDuckDBConnection(t *testing.T) {
+	t.Run("false when DuckDB is nil", func(t *testing.T) {
+		ds := newTestDevServer(t)
+		ds.Opts = StartOpts{Config: config.Config{ServerKind: headers.ServerKindDev}}
+
+		noAuthMiddleware := func(next http.Handler) http.Handler { return next }
+		api := NewDevAPI(ds, DevAPIOptions{AuthMiddleware: noAuthMiddleware})
+
+		req := httptest.NewRequest("GET", "/dev", nil)
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, req)
+
+		var info InfoResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+		require.False(t, info.Features["duckdb-insights"])
+	})
+
+	t.Run("true when DuckDB is set", func(t *testing.T) {
+		ds := newTestDevServer(t)
+		ds.Opts = StartOpts{Config: config.Config{ServerKind: headers.ServerKindDev}}
+		db, err := sql.Open("sqlite", ":memory:")
+		require.NoError(t, err)
+		defer db.Close()
+		ds.DuckDB = db
+
+		noAuthMiddleware := func(next http.Handler) http.Handler { return next }
+		api := NewDevAPI(ds, DevAPIOptions{AuthMiddleware: noAuthMiddleware})
+
+		req := httptest.NewRequest("GET", "/dev", nil)
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, req)
+
+		var info InfoResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+		require.True(t, info.Features["duckdb-insights"])
+		require.False(t, info.Features["duckdb-reads"])
+	})
+
+	t.Run("duckdb-reads needs DuckDB and --duckdb-reads", func(t *testing.T) {
+		ds := newTestDevServer(t)
+		ds.Opts = StartOpts{Config: config.Config{ServerKind: headers.ServerKindDev}, EnableDuckDBReads: true}
+		db, err := sql.Open("sqlite", ":memory:")
+		require.NoError(t, err)
+		defer db.Close()
+		ds.DuckDB = db
+
+		noAuthMiddleware := func(next http.Handler) http.Handler { return next }
+		api := NewDevAPI(ds, DevAPIOptions{AuthMiddleware: noAuthMiddleware})
+
+		req := httptest.NewRequest("GET", "/dev", nil)
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, req)
+
+		var info InfoResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+		require.True(t, info.Features["duckdb-insights"])
+		require.True(t, info.Features["duckdb-reads"])
+	})
 }
 
 func TestRegister_DuplicateAppCleanup(t *testing.T) {
@@ -1078,4 +1277,112 @@ func TestDevEndpoint_Returns404InCloudMode(t *testing.T) {
 
 	// Should return 404
 	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestRegister_URLDerivedAppKeepsFunctionVersionAcrossPlaceholderUpsert(t *testing.T) {
+	ctx := context.Background()
+
+	req := sdk.RegisterRequest{
+		URL:     "http://localhost:3000/api/inngest",
+		AppName: "my-app",
+		V:       "1",
+		Functions: []sdk.SDKFunction{{
+			Name: "Test Function",
+			Slug: "test-function",
+			Triggers: []inngest.Trigger{{
+				EventTrigger: &inngest.EventTrigger{Event: "test/event"},
+			}},
+			Steps: map[string]sdk.SDKStep{
+				"step-1": {
+					ID:   "step-1",
+					Name: "test step",
+					Runtime: map[string]any{
+						"url": "http://localhost:3000/api/inngest",
+					},
+				},
+			},
+		}},
+	}
+
+	sum, err := req.Checksum()
+	require.NoError(t, err)
+
+	ds := newTestDevServer(t)
+	api := &devapi{devserver: ds}
+
+	legacyAppID := inngest.DeterministicAppUUID(util.NormalizeAppURL(req.URL, false))
+	require.NotEqual(t, legacyAppID, inngest.DeterministicAppUUID(req.AppName))
+
+	_, err = ds.Data.UpsertApp(ctx, cqrs.UpsertAppParams{
+		ID:          legacyAppID,
+		Name:        req.AppName,
+		SdkLanguage: "go",
+		SdkVersion:  "1.0.0",
+		Checksum:    sum,
+		Url:         req.URL,
+		Method:      enums.AppMethodServe.String(),
+	})
+	require.NoError(t, err)
+
+	fnID := uuid.New()
+	fnConfig, err := json.Marshal(inngest.Function{
+		ID:              fnID,
+		Name:            "Test Function",
+		Slug:            "test-function",
+		FunctionVersion: 51,
+		Triggers: []inngest.Trigger{{
+			EventTrigger: &inngest.EventTrigger{Event: "test/event"},
+		}},
+	})
+	require.NoError(t, err)
+	_, err = ds.Data.UpsertFunction(ctx, cqrs.UpsertFunctionParams{
+		ID:        fnID,
+		AppID:     legacyAppID,
+		Name:      "Test Function",
+		Slug:      "test-function",
+		Config:    string(fnConfig),
+		CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	// pollSDKs startup upsert: name="", error=unreachable, empty checksum, same id.
+	_, err = ds.Data.UpsertApp(ctx, cqrs.UpsertAppParams{
+		ID:  legacyAppID,
+		Url: req.URL,
+		Error: sql.NullString{
+			Valid:  true,
+			String: deploy.DeployErrUnreachable.Error(),
+		},
+	})
+	require.NoError(t, err)
+
+	app, err := ds.Data.GetAppByID(ctx, legacyAppID)
+	require.NoError(t, err)
+	require.Equal(t, req.AppName, app.Name)
+	require.Equal(t, sum, app.Checksum)
+	require.False(t, app.Error.Valid)
+
+	reply, err := api.register(ctx, req)
+	require.NoError(t, err)
+	require.True(t, reply.OK)
+	require.False(t, reply.Modified, "unchanged register must short-circuit")
+	require.Equal(t, legacyAppID, *reply.AppID)
+
+	funcs, err := ds.Data.GetFunctionsByAppInternalID(ctx, legacyAppID)
+	require.NoError(t, err)
+	require.Len(t, funcs, 1)
+	var got inngest.Function
+	require.NoError(t, json.Unmarshal([]byte(funcs[0].Config), &got))
+	require.Equal(t, 51, got.FunctionVersion)
+}
+
+func requireFeatureObservationsJSON(t *testing.T, metadata map[string]string, expected string) {
+	t.Helper()
+
+	observations, err := registration.FeatureObservationsFromAppMetadata(metadata)
+	require.NoError(t, err)
+
+	byt, err := json.Marshal(observations)
+	require.NoError(t, err)
+	require.JSONEq(t, expected, string(byt))
 }

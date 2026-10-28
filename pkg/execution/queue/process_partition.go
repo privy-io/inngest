@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/inngest/inngest/pkg/constraintapi"
 	"github.com/inngest/inngest/pkg/logger"
 	"github.com/inngest/inngest/pkg/telemetry/metrics"
 	itrace "github.com/inngest/inngest/pkg/telemetry/trace"
@@ -104,6 +105,14 @@ func (q *queueProcessor) ProcessPartition(ctx context.Context, p *QueuePartition
 	}
 	if err != nil {
 		return fmt.Errorf("error leasing partition: %w", err)
+	}
+
+	if p.CapacityReleased {
+		// Capacity was released before this lease, so exhaustion cached before
+		// now may be stale. Ask the Constraint API instead, but keep honoring
+		// exhaustion this scan caches once it refills a constraint.
+		ctx = constraintapi.WithoutLimitingConstraintCacheBefore(ctx, q.Clock().Now())
+		span.SetAttributes(attribute.Bool("capacity_released", true))
 	}
 
 	if !p.IsSystem() {
@@ -350,7 +359,14 @@ func (q *queueProcessor) ProcessPartition(ctx context.Context, p *QueuePartition
 			// Semaphore-blocked items stay in the ready queue and can be picked up
 			// quickly once capacity is freed. Use a shorter requeue to reduce latency
 			// between run completion and the next run starting.
-			requeue = PartitionSemaphoreLimitRequeueExtension
+			requeue = q.SemaphoreRequeueExtension()
+		}
+
+		if iter.CtrSuccess.Load() == 0 {
+			// nothing was dispatched, so no completion will re-add this partition as
+			// a continuation.  drop any existing continuation, otherwise the next tick
+			// re-processes the partition and ignores the forced requeue below.
+			q.removeContinue(ctx, p, false)
 		}
 
 		// Requeue this partition as we hit concurrency limits.

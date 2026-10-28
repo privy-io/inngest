@@ -949,6 +949,8 @@ func (c *connectionHandler) receiveRouterMessagesFromGRPC(ctx context.Context, o
 					logger.WithErrorReportTags(map[string]string{
 						"gateway_id": c.conn.GatewayId.String(),
 						"conn_id":    c.conn.ConnectionId.String(),
+						"req_id":     data.RequestId,
+						"run_id":     data.RunId,
 					}))
 				msg.Result <- err
 				continue
@@ -1037,7 +1039,7 @@ func (c *connectionHandler) receiveRouterMessagesFromGRPC(ctx context.Context, o
 				case <-time.After(consts.ConnectWorkerRequestLeaseDuration + consts.ConnectWorkerRequestGracePeriod):
 					if c.pendingAcks.CompareAndDelete(data.RequestId, ackCh) {
 						msg.Result <- fmt.Errorf("worker did not ACK request %s", data.RequestId)
-						log.Warn("worker did not ACK request in time", "req_id", data.RequestId)
+						log.Warn("worker did not ACK request in time")
 					} else {
 						msg.Result <- <-ackCh
 					}
@@ -1311,6 +1313,18 @@ func (c *connectionHandler) handleSdkReply(ctx context.Context, msg *connectpb.C
 
 	// Persist response in buffer, which is polled by executor.
 	err := c.svc.stateManager.SaveResponse(ctx, c.conn.EnvID, data.RequestId, data)
+	bufferOutcome := "success"
+	if errors.Is(err, state.ErrResponseAlreadyBuffered) {
+		bufferOutcome = "duplicate"
+	} else if err != nil {
+		bufferOutcome = "error"
+	}
+	bufferTags := c.svc.metricsTags()
+	bufferTags["outcome"] = bufferOutcome
+	metrics.IncrConnectGatewayResponseBufferWriteCounter(ctx, 1, metrics.CounterOpt{
+		PkgName: pkgName,
+		Tags:    bufferTags,
+	})
 	if err != nil && !errors.Is(err, state.ErrResponseAlreadyBuffered) {
 		return fmt.Errorf("could not save response: %w", err)
 	}
@@ -1318,16 +1332,40 @@ func (c *connectionHandler) handleSdkReply(ctx context.Context, msg *connectpb.C
 	{
 		// Send a best-effort gRPC message to fast-track the response,
 		// this should be reliable enough but we still combine it with a reliable store like the buffer above.
-		grpcClient, err := c.svc.getOrCreateGRPCClient(ctx, c.conn.EnvID, data.RequestId)
+		// Bound notification latency so an unreachable executor cannot delay the
+		// worker ACK indefinitely after its response has already been buffered.
+		notifyCtx, notifyCancel := context.WithTimeout(ctx, time.Second)
+		defer notifyCancel()
+		grpcClient, err := c.svc.getOrCreateGRPCClient(notifyCtx, c.conn.EnvID, data.RequestId)
 
 		switch {
 		case err == nil:
-			if _, err := grpcClient.Reply(ctx, &connectpb.ReplyRequest{Data: data}); err != nil {
+			result, err := grpcClient.Reply(notifyCtx, &connectpb.ReplyRequest{Data: data})
+			if err != nil {
+				tags := c.svc.metricsTags()
+				tags["reason"] = "reply_error"
+				metrics.IncrConnectGatewayGRPCExecutorReplyFailureCounter(ctx, 1, metrics.CounterOpt{
+					PkgName: pkgName,
+					Tags:    tags,
+				})
 				l.Warn("could not fast-track response through grpc, executor will poll buffered response", "err", err)
+			} else if result == nil || !result.Success {
+				tags := c.svc.metricsTags()
+				tags["reason"] = "reply_rejected"
+				metrics.IncrConnectGatewayGRPCExecutorReplyFailureCounter(ctx, 1, metrics.CounterOpt{
+					PkgName: pkgName,
+					Tags:    tags,
+				})
 			}
 		case errors.Is(err, state.ErrExecutorNotFound):
 			l.Debug("executor not found in lease, reply was likely picked up by polling")
 		default:
+			tags := c.svc.metricsTags()
+			tags["reason"] = "client_creation"
+			metrics.IncrConnectGatewayGRPCExecutorReplyFailureCounter(ctx, 1, metrics.CounterOpt{
+				PkgName: pkgName,
+				Tags:    tags,
+			})
 			l.Warn("could not create grpc client for sdk reply, executor will poll buffered response", "err", err)
 		}
 	}

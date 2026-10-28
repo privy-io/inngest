@@ -3,6 +3,7 @@ package apiv2mcp
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -31,6 +32,108 @@ func TestRequest(t *testing.T) {
 		"data":           map[string]any{"message": "hi"},
 		"idempotencyKey": "idem-1",
 	}, body)
+	require.False(t, Tool(endpoint).Annotations.IdempotentHint)
+}
+
+func TestFunctionPauseResumeRequest(t *testing.T) {
+	for _, action := range []struct{ method, name string }{{"PauseFunction", "pause"}, {"ResumeFunction", "resume"}} {
+		t.Run(action.name, func(t *testing.T) {
+			endpoint := endpointByMethod(t, action.method)
+			req, err := Request(t.Context(), endpoint, map[string]any{
+				"appId": "my app", "functionId": "hello/world",
+			}, Options{})
+			require.NoError(t, err)
+			require.Equal(t, http.MethodPost, req.Method)
+			require.Equal(t, "/api/v2/apps/my%20app/functions/hello%2Fworld/"+action.name, req.URL.EscapedPath())
+			body, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			require.Empty(t, body)
+			require.Empty(t, req.URL.RawQuery)
+			schema := InputSchema(endpoint)
+			require.ElementsMatch(t, []string{"appId", "functionId"}, schema["required"])
+			require.Len(t, schema["properties"], 3)
+			tool := Tool(endpoint)
+			require.Equal(t, action.name+"_function", tool.Name)
+			require.True(t, tool.Annotations.IdempotentHint)
+			require.False(t, tool.Annotations.ReadOnlyHint)
+		})
+	}
+}
+
+func TestReplayTool(t *testing.T) {
+	endpoint := endpointByMethod(t, "CreateReplay")
+	tool := Tool(endpoint)
+	require.Equal(t, "create_replay", tool.Name)
+	require.False(t, tool.Annotations.ReadOnlyHint)
+	require.False(t, tool.Annotations.IdempotentHint)
+	require.True(t, *tool.Annotations.DestructiveHint)
+	schema := tool.InputSchema.(map[string]any)
+	require.ElementsMatch(t, []string{"appId", "name", "functionId", "from", "until", "statuses"}, schema["required"])
+	properties := schema["properties"].(map[string]any)
+	functionID := properties["functionId"].(map[string]any)
+	require.Equal(t, "string", functionID["type"])
+	statuses := properties["statuses"].(map[string]any)
+	require.Equal(t, "array", statuses["type"])
+	require.Equal(t, []string{"ALL", "COMPLETED", "FAILED", "CANCELLED", "SKIPPED_PAUSED"}, statuses["items"].(map[string]any)["enum"])
+	for _, field := range []string{"from", "until"} {
+		timestamp := properties[field].(map[string]any)
+		require.Equal(t, "string", timestamp["type"])
+		require.Equal(t, "date-time", timestamp["format"])
+	}
+
+	var gotMethod, gotPath, gotQuery, gotEnv string
+	var gotBody map[string]any
+	result, err := call(t.Context(), &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{Arguments: json.RawMessage(`{
+			"env":"branch-a","appId":"my-app","name":"Replay orders","functionId":"orders-created",
+			"statuses":["FAILED","SKIPPED_PAUSED"],"from":"2026-01-01T00:00:00Z","until":"2026-01-02T00:00:00Z"
+		}`)},
+	}, endpoint, Options{
+		BasePath: "/v2", EnvHeader: "X-Inngest-Env",
+		Execute: func(_ context.Context, _ apiv2endpoint.Endpoint, req *http.Request) (*mcp.CallToolResult, error) {
+			gotMethod, gotPath, gotQuery = req.Method, req.URL.Path, req.URL.RawQuery
+			gotEnv = req.Header.Get("X-Inngest-Env")
+			require.NoError(t, json.NewDecoder(req.Body).Decode(&gotBody))
+			return ToolResult(map[string]any{"id": "replay-id"}, "created replay"), nil
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+	require.Equal(t, map[string]any{"id": "replay-id"}, result.StructuredContent)
+	require.Equal(t, http.MethodPost, gotMethod)
+	require.Equal(t, "/v2/apps/my-app/functions/orders-created/replays", gotPath)
+	require.Empty(t, gotQuery)
+	require.Equal(t, "branch-a", gotEnv)
+	require.Equal(t, map[string]any{
+		"name":     "Replay orders",
+		"statuses": []any{"FAILED", "SKIPPED_PAUSED"},
+		"from":     "2026-01-01T00:00:00Z", "until": "2026-01-02T00:00:00Z",
+	}, gotBody)
+}
+
+func TestSendEventRequest(t *testing.T) {
+	endpoint := endpointByMethod(t, "SendEvent")
+	req, err := Request(context.Background(), endpoint, map[string]any{
+		"env":  "branch-a",
+		"name": "app/user.created",
+		"data": map[string]any{"userId": "user-1"},
+		"id":   "event-1",
+	}, Options{EnvHeader: "X-Inngest-Env"})
+	require.NoError(t, err)
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "/api/v2/events", req.URL.Path)
+	require.Equal(t, "branch-a", req.Header.Get("X-Inngest-Env"))
+
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(req.Body).Decode(&body))
+	require.Equal(t, map[string]any{
+		"name": "app/user.created",
+		"data": map[string]any{"userId": "user-1"},
+		"id":   "event-1",
+	}, body)
+
+	schema := InputSchema(endpoint)
+	require.ElementsMatch(t, []string{"name"}, schema["required"])
 }
 
 func TestInputSchema(t *testing.T) {
@@ -38,10 +141,32 @@ func TestInputSchema(t *testing.T) {
 	schema := InputSchema(endpoint)
 	properties := schema["properties"].(map[string]any)
 	require.Contains(t, properties, "env")
+	require.Equal(
+		t,
+		"Environment slug. Required for environment-specific tools when the credential can access all environments.",
+		properties["env"].(map[string]any)["description"],
+	)
 	require.Contains(t, properties, "appId")
 	require.Contains(t, properties, "functionId")
 	require.Contains(t, properties, "data")
 	require.ElementsMatch(t, []string{"appId", "functionId"}, schema["required"])
+}
+
+func TestInputSchemaUsesOpenAPIEnumValues(t *testing.T) {
+	schema := InputSchema(endpointByMethod(t, "ListRuns"))
+	properties := schema["properties"].(map[string]any)
+	include := properties["include"].(map[string]any)
+	items := include["items"].(map[string]any)
+	require.Equal(t, []string{"output", "deferredFrom"}, items["enum"])
+	require.NotContains(t, items["enum"], "deferred_from")
+}
+
+func TestInputSchemaMarksDeprecatedFields(t *testing.T) {
+	endpoint := endpointByMethod(t, "GetFunctionTrace")
+	properties := InputSchema(endpoint)["properties"].(map[string]any)
+
+	require.Equal(t, true, properties["includeOutput"].(map[string]any)["deprecated"])
+	require.NotContains(t, properties["include"].(map[string]any), "deprecated")
 }
 
 func TestToolAnnotations(t *testing.T) {
@@ -51,6 +176,7 @@ func TestToolAnnotations(t *testing.T) {
 		destructive bool
 	}{
 		{method: "GetFunctions", readOnly: true, destructive: false},
+		{method: "SendEvent", readOnly: false, destructive: true},
 		{method: "InvokeFunction", readOnly: false, destructive: true},
 		{method: "CancelRun", readOnly: false, destructive: true},
 	} {

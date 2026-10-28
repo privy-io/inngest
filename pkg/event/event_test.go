@@ -56,12 +56,14 @@ func TestUnmarshalJSON(t *testing.T) {
 		r.Error(err)
 	})
 
-	t.Run("invalid session value type returns error", func(t *testing.T) {
+	t.Run("null manual session value is a tombstone, not an error", func(t *testing.T) {
 		r := require.New(t)
 
 		var evt Event
 		err := json.Unmarshal([]byte(`{"name":"test/event","data":{},"meta":{"sessions":{"conversation_id":null}}}`), &evt)
-		r.EqualError(err, `event session "conversation_id" must be a string or number`)
+		r.NoError(err)
+		// The tombstone is captured off the wire, not surfaced as a session id.
+		r.Empty(evt.Meta.Sessions)
 	})
 
 	t.Run("boolean session value returns error", func(t *testing.T) {
@@ -69,7 +71,7 @@ func TestUnmarshalJSON(t *testing.T) {
 
 		var evt Event
 		err := json.Unmarshal([]byte(`{"name":"test/event","data":{},"meta":{"sessions":{"active":true}}}`), &evt)
-		r.EqualError(err, `event session "active" must be a string or number`)
+		r.EqualError(err, `event session "active" must be a string, number, or null`)
 	})
 
 	t.Run("preserves numeric session precision", func(t *testing.T) {
@@ -103,6 +105,39 @@ func TestUnmarshalJSON(t *testing.T) {
 		r.NoError(err)
 		r.Equal(len(byt), evt.Size())
 	})
+}
+
+func TestEventValidateName(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventName string
+		wantErr   string
+	}{
+		{
+			name:      "valid",
+			eventName: "app/user.created",
+		},
+		{
+			name:    "empty",
+			wantErr: "event name is empty",
+		},
+		{
+			name:      "embedded NUL",
+			eventName: "app/user\x00.created",
+			wantErr:   "event name contains a NUL character",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (Event{Name: tt.eventName}).Validate(t.Context())
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tt.wantErr)
+		})
+	}
 }
 
 func TestEventValidateSessions(t *testing.T) {

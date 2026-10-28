@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { RiArrowRightSLine } from '@remixicon/react';
 
-import { AITrace } from '../AI/AITrace';
-import { parseAIOutput } from '../AI/utils';
 import {
   ElementWrapper,
   IDElement,
@@ -14,14 +12,12 @@ import {
 } from '../DetailsCard/Element';
 import { Link } from '../Link';
 import type { Run as InitialRunData } from '../RunsPage/types';
-import type { TraceResult } from '../SharedContext/useGetTraceResult';
 import { usePathCreator } from '../SharedContext/usePathCreator';
-import { AICell } from '../Table/Cell';
 import { toMaybeDate } from '../utils/date';
 import { isLazyDone, type Lazy } from '../utils/lazyLoad';
 import { Actions } from './Actions';
 import { Nav } from './Nav';
-import { formatDuration } from './runDetailsUtils';
+import { formatDuration, getScheduledFor } from './runDetailsUtils';
 
 type Props = {
   standalone: boolean;
@@ -29,9 +25,9 @@ type Props = {
   initialRunData?: InitialRunData;
   run: Lazy<Run>;
   runID: string;
-  result?: TraceResult;
   isDurableEndpoint?: boolean;
   readOnly?: boolean;
+  additionalAction?: React.ReactNode;
 };
 
 type Run = {
@@ -49,12 +45,12 @@ type Run = {
     childrenSpans?: unknown[];
     endedAt: string | null;
     queuedAt: string;
+    scheduledAt?: string | null;
     startedAt: string | null;
     status: string;
     stepID?: string | null;
     debugSessionID?: string | null;
   };
-  hasAI: boolean;
 };
 
 export const RunInfo = ({
@@ -62,13 +58,15 @@ export const RunInfo = ({
   run,
   runID,
   standalone,
-  result,
   isDurableEndpoint,
   readOnly,
+  additionalAction,
 }: Props) => {
   const [expanded, setExpanded] = useState(true);
   const allowCancel = isLazyDone(run) && !Boolean(run.trace.endedAt);
-  const aiOutput = result?.data ? parseAIOutput(result.data) : undefined;
+  const scheduledFor = isLazyDone(run)
+    ? getScheduledFor(run.trace.queuedAt, run.trace.scheduledAt)
+    : null;
   const { pathCreator } = usePathCreator();
 
   return (
@@ -98,6 +96,7 @@ export const RunInfo = ({
 
         {!readOnly && (
           <div className="flex items-center gap-2">
+            {additionalAction}
             <Actions
               runID={runID}
               fnID={isLazyDone(run) ? run.fn.id : undefined}
@@ -144,7 +143,7 @@ export const RunInfo = ({
             {(run: Run) => {
               return (
                 <LinkElement href={pathCreator.function({ functionSlug: run.fn.slug })}>
-                  {run.hasAI ? <AICell>{run.fn.name}</AICell> : run.fn.name}
+                  {run.fn.name}
                 </LinkElement>
               );
             }}
@@ -162,7 +161,7 @@ export const RunInfo = ({
               const queuedAt = toMaybeDate(run.trace.queuedAt);
               if (queuedAt) {
                 durationText = formatDuration(
-                  (toMaybeDate(run.trace.endedAt) ?? new Date()).getTime() - queuedAt.getTime(),
+                  (toMaybeDate(run.trace.endedAt) ?? new Date()).getTime() - queuedAt.getTime()
                 );
               }
 
@@ -186,6 +185,15 @@ export const RunInfo = ({
               return <TimeElement date={new Date(run.trace.queuedAt)} />;
             }}
           </OptimisticElementWrapper>
+
+          {scheduledFor && (
+            <ElementWrapper
+              label="Scheduled at"
+              tooltip="When this run is scheduled to start, taken from the triggering event's ts timestamp."
+            >
+              <TimeElement date={scheduledFor} />
+            </ElementWrapper>
+          )}
 
           <OptimisticElementWrapper
             label="Started at"
@@ -220,7 +228,6 @@ export const RunInfo = ({
               return <TimeElement date={endedAt} />;
             }}
           </OptimisticElementWrapper>
-          {aiOutput && <AITrace aiOutput={aiOutput} />}
         </div>
       )}
     </div>

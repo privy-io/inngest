@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VividCortex/ewma"
@@ -44,6 +45,7 @@ func New(
 		return nil, fmt.Errorf("shard registry must not be nil")
 	}
 
+	reader := newShardBackedReaders(shards, o.AccountShardIterationEnabled)
 	qp := &queueProcessor{
 		name:         name,
 		QueueOptions: o,
@@ -70,11 +72,15 @@ func New(
 			WithProducerJobPromotion(o.enableJobPromotion),
 			WithProducerConditionalTracer(o.ConditionalTracer),
 		),
-		Consumer:        NewConsumer(shards),
-		JobQueueReader:  newJobQueueReader(shards, o.AccountShardIterationEnabled),
-		Migrator:        newQueueMigrator(shards, o.Clock),
-		Unpauser:        newQueueUnpauser(shards),
-		AttemptResetter: newAttemptResetter(shards),
+		Consumer:             NewConsumer(shards),
+		RunQueueReader:       reader,
+		QueueStatusReader:    reader,
+		QueuePartitionReader: reader,
+		QueueBacklogReader:   reader,
+		QueueItemReader:      reader,
+		MigrationLocker:      newQueueMigrationLocker(shards),
+		Unpauser:             newQueueUnpauser(shards),
+		AttemptResetter:      NewAttemptResetter(shards),
 
 		peekSizeCache: ccache.New(ccache.Configure[int64]().MaxSize(50_000)),
 
@@ -99,18 +105,41 @@ func New(
 	if o.queueConsumer != nil {
 		qp.Consumer = o.queueConsumer
 	}
+	if o.queueRunReader != nil {
+		qp.RunQueueReader = o.queueRunReader
+	}
+	if o.queueStatusReader != nil {
+		qp.QueueStatusReader = o.queueStatusReader
+	}
+	if o.queuePartitionReader != nil {
+		qp.QueuePartitionReader = o.queuePartitionReader
+	}
+	if o.queueBacklogReader != nil {
+		qp.QueueBacklogReader = o.queueBacklogReader
+	}
+	if o.queueItemReader != nil {
+		qp.QueueItemReader = o.queueItemReader
+	}
+	if o.queueAttemptResetter != nil {
+		qp.AttemptResetter = o.queueAttemptResetter
+	}
 	qp.configureQueueRoles()
 
 	return qp, nil
 }
 
 type queueProcessor struct {
+	hintsStopped atomic.Bool
 	*QueueOptions
 
 	Producer
 	Consumer
-	JobQueueReader
-	Migrator
+	RunQueueReader
+	QueueStatusReader
+	QueuePartitionReader
+	QueueBacklogReader
+	QueueItemReader
+	MigrationLocker
 	Unpauser
 	AttemptResetter
 
@@ -231,15 +260,17 @@ func (q *queueProcessor) Run(ctx context.Context, f RunFunc) error {
 		l.Info("Executor started in assignedQueueShard Mode", "queue_shard", q.Shard().Name())
 	}
 
-	for _, role := range q.roles {
-		go q.runRole(ctx, role)
-	}
-
 	scanner := QueueScanner(partitionQueueScanner{q: q})
 	if shard := q.Shard(); shard != nil {
 		if shardScanner, ok := shard.(QueueScanner); ok {
 			scanner = shardScanner
 		}
+	}
+	if err := q.configureScannerRoles(scanner); err != nil {
+		return err
+	}
+	for _, role := range q.roles {
+		go q.runRole(ctx, role)
 	}
 
 	dispatch := func(ctx context.Context, item ProcessItem) (DispatchedItem, error) {
@@ -258,12 +289,15 @@ func (q *queueProcessor) Run(ctx context.Context, f RunFunc) error {
 		Leaser:          q,
 		Dispatch:        dispatch,
 		WorkerSemaphore: q.Semaphore(),
+		IsRoleActive:    q.isRoleActive,
 	}
 	if rt.Leaser == nil {
 		return ErrQueueScannerMissingLeaser
 	}
 
+	stopHints := q.startItemHints(ctx, dispatch)
 	err := scanner.Run(ctx, rt)
+	stopHints()
 
 	l.Info("queue waiting to quit", "err", err)
 	q.wg.Wait()

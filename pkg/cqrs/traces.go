@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/inngest/inngest/pkg/tracing/metadata"
 	"github.com/oklog/ulid/v2"
 )
+
+var ErrInvalidRunExpression = errors.New("invalid run expression")
 
 type SpanStatus int
 
@@ -351,37 +354,44 @@ type SpanLink struct {
 }
 
 type SpanMetadata struct {
-	Scope     metadata.Scope  `json:"scope"`
+	Scope metadata.Scope `json:"scope"`
+	// Kind is the full kind (e.g. "userland.foo") on the cqrs read path, but
+	// stripped of its userland/inngest prefix (e.g. "foo") when read from
+	// DuckDB's inngest.run_metadata. IsUser tells the two apart either way.
 	Kind      metadata.Kind   `json:"kind"`
+	IsUser    bool            `json:"is_user"`
 	Values    metadata.Values `json:"values"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 // TraceRun represents a function run backed by a trace
 type TraceRun struct {
-	AccountID    uuid.UUID       `json:"account_id"`
-	WorkspaceID  uuid.UUID       `json:"workspace_id"`
-	AppID        uuid.UUID       `json:"app_id"`
-	FunctionID   uuid.UUID       `json:"function_id"`
-	TraceID      string          `json:"trace_id"`
-	RunID        string          `json:"run_id"`
-	QueuedAt     time.Time       `json:"queued_at"`
-	StartedAt    time.Time       `json:"started_at,omitempty"`
-	EndedAt      time.Time       `json:"ended_at,omitempty"`
-	Duration     time.Duration   `json:"duration"`
-	SourceID     string          `json:"source_id,omitempty"`
-	TriggerIDs   []string        `json:"trigger_ids"`
-	Triggers     [][]byte        `json:"triggers"`
-	Output       []byte          `json:"output,omitempty"`
-	Status       enums.RunStatus `json:"status"`
-	IsDeferred   bool            `json:"is_deferred"`
-	IsBatch      bool            `json:"is_batch"`
-	IsDebounce   bool            `json:"is_debounce"`
-	HasAI        bool            `json:"has_ai"`
-	BatchID      *ulid.ULID      `json:"batch_id,omitempty"`
-	CronSchedule *string         `json:"cron_schedule,omitempty"`
+	AccountID               uuid.UUID       `json:"account_id"`
+	WorkspaceID             uuid.UUID       `json:"workspace_id"`
+	AppID                   uuid.UUID       `json:"app_id"`
+	FunctionID              uuid.UUID       `json:"function_id"`
+	TraceID                 string          `json:"trace_id"`
+	RunID                   string          `json:"run_id"`
+	QueuedAt                time.Time       `json:"queued_at"`
+	StartedAt               time.Time       `json:"started_at,omitempty"`
+	EndedAt                 time.Time       `json:"ended_at,omitempty"`
+	Duration                time.Duration   `json:"duration"`
+	SourceID                string          `json:"source_id,omitempty"`
+	TriggerIDs              []string        `json:"trigger_ids"`
+	Triggers                [][]byte        `json:"triggers"`
+	Output                  []byte          `json:"output,omitempty"`
+	Status                  enums.RunStatus `json:"status"`
+	IsDeferred              bool            `json:"is_deferred"`
+	DeferParentFunctionSlug string          `json:"defer_parent_function_slug,omitempty"`
+	IsBatch                 bool            `json:"is_batch"`
+	IsDebounce              bool            `json:"is_debounce"`
+	HasAI                   bool            `json:"has_ai"`
+	BatchID                 *ulid.ULID      `json:"batch_id,omitempty"`
+	CronSchedule            *string         `json:"cron_schedule,omitempty"`
 	// Cursor is a composite cursor used for pagination
 	Cursor string `json:"cursor"`
+
+	SkipReason *enums.SkipReason `json:"skip_reason,omitempty"`
 
 	AppName      string `json:"app_name,omitempty"`
 	FunctionSlug string `json:"function_slug,omitempty"`
@@ -424,18 +434,10 @@ type TraceReader interface {
 	GetTraceRunsCount(ctx context.Context, opt GetTraceRunOpt) (int, error)
 	// GetTraceRun retrieve the specified run
 	GetTraceRun(ctx context.Context, id TraceRunIdentifier) (*TraceRun, error)
-	// GetTraceSpansByRun retrieves all the spans related to the trace
-	GetTraceSpansByRun(ctx context.Context, id TraceRunIdentifier) ([]*Span, error)
 	// LegacyGetSpanOutput retrieves the output for the specified span
 	LegacyGetSpanOutput(ctx context.Context, id SpanIdentifier) (*SpanOutput, error)
-	// GetSpanStack retrieves the step stack for the specified span
-	GetSpanStack(ctx context.Context, id SpanIdentifier) ([]string, error)
 	// GetSpansByRunID retrieves all spans related to the specified run
 	GetSpansByRunID(ctx context.Context, runID ulid.ULID) (*OtelSpan, error)
-	// GetSpansByDebugRunID retrieves all spans related to the specified debug run
-	GetSpansByDebugRunID(ctx context.Context, debugRunID ulid.ULID) ([]*OtelSpan, error)
-	// GetSpansByDebugSessionID retrieves all spans related to the specified debug session
-	GetSpansByDebugSessionID(ctx context.Context, debugSessionID ulid.ULID) ([][]*OtelSpan, error)
 	GetSpanOutput(ctx context.Context, id SpanIdentifier) (*SpanOutput, error)
 	GetRunSpanByRunID(ctx context.Context, runID ulid.ULID, accountID, workspaceID uuid.UUID) (*OtelSpan, error)
 	GetStepSpanByStepID(ctx context.Context, runID ulid.ULID, stepID string, accountID, workspaceID uuid.UUID) (*OtelSpan, error)
@@ -461,6 +463,8 @@ type GetTraceRunOpt struct {
 	Cursor        string
 	Items         uint
 	IncludeOutput bool
+	// IncludeSkipped exposes skipped runs for replay selection; ordinary run lists omit them.
+	IncludeSkipped bool
 	// Whether the run list should use the tracing preview stores
 	Preview bool
 }
@@ -617,4 +621,7 @@ type TraceCursor struct {
 	Field string `json:"f"`
 	// Value represents the value used for this cursor
 	Value int64 `json:"v"`
+	// NanosecondRemainder preserves sub-microsecond precision for span timestamps.
+	// Older cursors omit this field and retain their original precision.
+	NanosecondRemainder int64 `json:"ns,omitempty"`
 }

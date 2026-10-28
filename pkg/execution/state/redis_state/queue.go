@@ -47,6 +47,7 @@ func (q *queue) ShardAssignmentConfig() osqueue.ShardAssignmentConfig {
 
 type RedisQueueShard interface {
 	osqueue.QueueShard
+	osqueue.BacklogOperations
 	Client() *QueueClient
 
 	QueueIterator(ctx context.Context, opts QueueIteratorOpts) (partitionCount int64, queueItemCount int64, err error)
@@ -926,6 +927,7 @@ func (q *queue) Lease(
 		now.UnixMilli(),
 		setEarliestPeekTime,
 		item.EarliestPeekTime,
+		item.GenerationID,
 	})
 	if err != nil {
 		return nil, err
@@ -1186,6 +1188,7 @@ func (q *queue) PartitionLease(
 		if result[0] > p.Last {
 			p.Last = result[0]
 		}
+		p.CapacityReleased = len(result) > 1 && result[1] == 1
 
 		return &leaseID, nil
 	}
@@ -1333,12 +1336,13 @@ func (q *queue) partitionPeek(ctx context.Context, partitionKey string, sequenti
 	client := q.RedisClient.Client()
 	kg := q.RedisClient.kg
 
-	if limit > osqueue.PartitionPeekMax {
-		return nil, osqueue.ErrPartitionPeekMaxExceedsLimits
-	}
+	// The scanner already resolves the dynamic limit and divides it across accounts.
+	// Honor that budget without re-evaluating the getter or applying its floor;
+	// direct callers still get a default for non-positive limits and an absolute cap.
 	if limit <= 0 {
 		limit = osqueue.PartitionPeekMax
 	}
+	limit = min(limit, osqueue.AbsolutePartitionPeekMax)
 
 	// TODO(tony): If this is an allowlist, only peek the given partitions.  Use ZMSCORE
 	// to fetch the scores for all allowed partitions, then filter where score <= until.
@@ -1614,7 +1618,7 @@ func (q *queue) partitionPeek(ctx context.Context, partitionKey string, sequenti
 	// Some scanners run sequentially, ensuring we always work on the functions with
 	// the oldest run at times in order, no matter the priority.
 	if sequential {
-		n := int(math.Min(float64(len(items)), float64(osqueue.PartitionSelectionMax)))
+		n := min(len(items), int(osqueue.PartitionSelectionMax))
 		return items[0:n], nil
 	}
 
@@ -1684,11 +1688,20 @@ func (q *queue) AccountPeek(ctx context.Context, sequential bool, until time.Tim
 		items[i] = parsed
 	}
 
+	// Look up each account's priority concurrently. The lookups are independent
+	// and can each wait on a remote cache; done one after another, they stall
+	// the scan loop while many accounts have work due, such as during a burst
+	// of cron runs scheduled for the same time.
 	weights := make([]float64, len(items))
+	eg := errgroup.Group{}
+	eg.SetLimit(int(osqueue.AccountPeekMax))
 	for i := range items {
-		accountPriority := q.AccountPriorityFinder(ctx, items[i])
-		weights[i] = float64(10 - accountPriority)
+		eg.Go(func() error {
+			weights[i] = float64(10 - q.AccountPriorityFinder(ctx, items[i]))
+			return nil
+		})
 	}
+	_ = eg.Wait()
 
 	// Some scanners run sequentially, ensuring we always work on the accounts with
 	// the oldest run at times in order, no matter the priority.

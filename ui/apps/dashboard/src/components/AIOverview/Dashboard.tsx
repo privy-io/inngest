@@ -27,8 +27,10 @@ import { CHART_COLORS } from '../InsightsMetrics/colors';
 import { Section, SectionGroupHeading } from '../InsightsMetrics/Section';
 import { AIOverviewEmptyState } from './EmptyState';
 import {
+  COST_TOOLTIP,
   formatCost,
   formatCostAxis,
+  formatCostAxisBar,
   formatMs,
   formatSeconds,
   formatSecondsAxis,
@@ -63,7 +65,7 @@ const DEFAULT_DURATION = { days: 7 };
 
 const formatRuns = (value: number) => `${formatCompactNumber(value)} runs`;
 
-// Shared by "Cost over time" and "Cost by model" — both plot ai_token_trend/
+// Shared by "Estimated cost over time" and "Estimated cost by model" — both plot ai_token_trend/
 // ai_model_distribution's `cost` column, which carries input/output tokens
 // alongside it in the same row (see InsightsMetrics/queries.ts), so the
 // tooltip can show token counts without adding a visual series for them.
@@ -107,8 +109,10 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
   const parsedStart = toDate(start);
   const parsedEnd = toDate(end);
 
-  // `loadedAt` bumps on router.invalidate(), so RefreshButton refires queries.
-  const loadedAt = useRouterState({ select: (s) => s.loadedAt });
+  // `updatedAt` bumps on router.invalidate(), so RefreshButton refires queries.
+  const updatedAt = useRouterState({
+    select: (s) => s.matches.at(-1)?.updatedAt,
+  });
 
   const range = useMemo(() => {
     if (parsedStart && parsedEnd) {
@@ -117,7 +121,7 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
     const to = new Date();
     const dur = parsedDuration || DEFAULT_DURATION;
     return { from: subtractDuration(to, dur), to };
-  }, [start, end, duration, loadedAt]);
+  }, [start, end, duration, updatedAt]);
 
   const timeRange = useMemo(
     () => ({ from: range.from.toISOString(), to: range.to.toISOString() }),
@@ -261,11 +265,11 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
         };
 
   return (
-    <div className="bg-canvasBase mx-auto flex h-full w-full max-w-[1500px] flex-col px-6">
-      {showEmptyState && <AIOverviewEmptyState compact className="mt-3" />}
-      {error && <Error message="There was an error loading the AI Overview." />}
+    <div className="bg-canvasBase no-scrollbar min-h-0 w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+      <div className="mx-auto w-full max-w-[1500px] px-6 pb-6">
+        {showEmptyState && <AIOverviewEmptyState compact className="mt-3" />}
+        {error && <Error message="There was an error loading the AI Overview." />}
 
-      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden">
         <div className="bg-canvasBase flex flex-row items-center gap-1.5 pb-3 pt-6">
           <SelectGroup>
             <span className="border-muted bg-modalBase text-muted box-content flex h-[24px] items-center rounded border px-1.5 text-[13px]">
@@ -440,14 +444,19 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
 
         <SectionGroupHeading>Cost</SectionGroupHeading>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Section title="Cost over time" query={tokenTrend.data?.query} queryName="AI cost over time">
+          <Section
+            title="Estimated cost over time"
+            tooltip={COST_TOOLTIP}
+            query={tokenTrend.data?.query}
+            queryName="AI cost over time"
+          >
             <TrendChart
               points={toTrendPoints(tokenTrend.data)}
               isLoading={tokenTrend.fetching && !tokenTrend.data}
               hasData={hasAnyCalls}
               chartType="bar"
               format={formatCost}
-              axisFormat={formatCostAxis}
+              axisFormat={formatCostAxisBar}
               allowDecimals
               series={[
                 {
@@ -461,7 +470,8 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
             />
           </Section>
           <Section
-            title="Cost per run over time"
+            title="Estimated cost per run over time"
+            tooltip={COST_TOOLTIP}
             query={costPerRunTrend.data?.query}
             queryName="AI cost per run over time"
           >
@@ -476,13 +486,19 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
               defaultValue={0}
             />
           </Section>
-          <Section title="Cost by model" query={modelDistribution.data?.query} queryName="AI cost by model">
+          <Section
+            title="Estimated cost by model"
+            tooltip={COST_TOOLTIP}
+            query={modelDistribution.data?.query}
+            queryName="AI cost by model"
+          >
             <CategoricalChart
               items={toListItems(modelDistribution.data)}
               isLoading={modelDistribution.fetching && !modelDistribution.data}
               valueName="cost"
               colors={CHART_COLORS}
               format={formatCost}
+              valueLabelFormat={formatCostAxisBar}
               tooltipExtras={TOKEN_TOOLTIP_EXTRAS}
               showYAxisLine={false}
               showTooltipValueName={false}
@@ -490,7 +506,8 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
             />
           </Section>
           <Section
-            title="Cost by function"
+            title="Estimated cost by function"
+            tooltip={COST_TOOLTIP}
             query={topFunctionsByCost.data?.query}
             queryName="AI cost by function"
           >
@@ -500,6 +517,7 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
               valueName="cost"
               colors={CHART_COLORS}
               format={formatCost}
+              valueLabelFormat={formatCostAxisBar}
               formatIdentifier={(id) => functionsBySlug.get(id)?.name ?? id}
               showYAxisLine={false}
               showTooltipValueName={false}
@@ -509,6 +527,7 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
           </Section>
           <Section
             title="Most expensive runs"
+            tooltip={COST_TOOLTIP}
             query={mostExpensiveRuns.data?.query}
             queryName="AI most expensive runs"
           >
@@ -531,6 +550,7 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
           </Section>
           <Section
             title="Most expensive steps"
+            tooltip={COST_TOOLTIP}
             query={mostExpensiveSteps.data?.query}
             queryName="AI most expensive steps"
           >
@@ -552,6 +572,7 @@ export const AIOverviewDashboard = ({ envSlug }: { envSlug: string }) => {
           </Section>
           <Section
             title="Most expensive sessions"
+            tooltip={COST_TOOLTIP}
             className="lg:col-span-2"
             query={mostExpensiveSessions.data?.query}
             queryName="AI most expensive sessions"

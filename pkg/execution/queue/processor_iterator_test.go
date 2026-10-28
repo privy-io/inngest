@@ -113,6 +113,8 @@ type mockShardForIterator struct {
 	earliestPeekTimes           sync.Map
 	earliestPeekTimeCalls       int32
 	earliestPeekTimeErr         error
+	dequeueCalls                int32
+	dequeueErr                  error
 }
 
 func (m *mockShardForIterator) Name() string {
@@ -182,7 +184,8 @@ func (m *mockShardForIterator) RequeueByJobID(ctx context.Context, jobID string,
 }
 
 func (m *mockShardForIterator) Dequeue(ctx context.Context, i QueueItem, opts ...DequeueOptionFn) error {
-	return nil
+	atomic.AddInt32(&m.dequeueCalls, 1)
+	return m.dequeueErr
 }
 
 func (m *mockShardForIterator) PartitionPeek(ctx context.Context, sequential bool, until time.Time, limit int64) ([]*QueuePartition, error) {
@@ -306,7 +309,7 @@ func (m *mockShardForIterator) PeekAccountPartitions(ctx context.Context, accoun
 	return nil, nil
 }
 
-func (m *mockShardForIterator) BacklogRefillConstraintCheck(ctx context.Context, shadowPart *QueueShadowPartition, backlog *QueueBacklog, constraints PartitionConstraintConfig, items []*QueueItem, operationIdempotencyKey string, now time.Time) (*BacklogRefillConstraintCheckResult, error) {
+func (m *mockShardForIterator) BacklogRefillConstraintCheck(ctx context.Context, shadowPart *QueueShadowPartition, backlog *QueueBacklog, constraints PartitionConstraintConfig, items []*QueueItem, operationIdempotencyKey string, now time.Time, enableKeyQueues bool) (*BacklogRefillConstraintCheckResult, error) {
 	return nil, nil
 }
 
@@ -452,7 +455,7 @@ func (m *mockShardForIterator) RunJobs(ctx context.Context, scope Scope, runID u
 	return nil, nil
 }
 
-func (m *mockQueueProcessor) BacklogRefillConstraintCheck(ctx context.Context, shadowPart *QueueShadowPartition, backlog *QueueBacklog, constraints PartitionConstraintConfig, items []*QueueItem, operationIdempotencyKey string, now time.Time) (*BacklogRefillConstraintCheckResult, error) {
+func (m *mockQueueProcessor) BacklogRefillConstraintCheck(ctx context.Context, shadowPart *QueueShadowPartition, backlog *QueueBacklog, constraints PartitionConstraintConfig, items []*QueueItem, operationIdempotencyKey string, now time.Time, enableKeyQueues bool) (*BacklogRefillConstraintCheckResult, error) {
 	return nil, nil
 }
 

@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { ElementWrapper, TextElement, TimeElement } from '../DetailsCard/Element';
-import type { SpanMetadata, SpanMetadataKind } from './types';
+import { canonicalMetadataKind } from '../RunDetailsShared/metadataKind';
+import type { SpanMetadata } from './types';
 
 const inngestKindLabels: Record<string, string> = {
   ai: 'AI Metadata',
@@ -10,6 +11,7 @@ const inngestKindLabels: Record<string, string> = {
   response_headers: 'Response Headers',
   score: 'Scores',
   usage: 'Run Usage',
+  warning: 'Warnings',
   warnings: 'Warnings',
 };
 
@@ -21,7 +23,7 @@ const formatBytes = (bytes: number): string => {
 const byteValueKeys = new Set(['metadata_bytes']);
 
 /** Returns a human-readable label for a metadata kind. Handles both inngest.* and userland.* kinds. */
-const getKindLabel = (kind: SpanMetadataKind): string => {
+const getKindLabel = (kind: string): string => {
   if (!kind) return 'Unknown Metadata';
   const [namespace, kindName] = kind.split('.');
   if (!kindName) {
@@ -45,7 +47,8 @@ const getKindLabel = (kind: SpanMetadataKind): string => {
 // to accept any arm's values (including generated interface types like
 // AIMetadata, which lack an implicit index signature).
 type MetadataAttrRowProps = {
-  kind: SpanMetadataKind;
+  // The full kind, see canonicalMetadataKind.
+  kind: string;
   scope: SpanMetadata['scope'];
   values: SpanMetadata['values'];
   updatedAt: string;
@@ -113,7 +116,13 @@ const MetadataAttrRow = ({ kind, scope, values, updatedAt, isLast }: MetadataAtt
 };
 
 /** Displays metadata attributes as key-value pairs. Status Code is pinned to the top, remaining entries sorted alphabetically. */
-export const MetadataAttrs = ({ metadata }: { metadata: SpanMetadata[] }) => {
+export const MetadataAttrs = ({
+  metadata,
+  footer,
+}: {
+  metadata: SpanMetadata[];
+  footer?: ReactNode;
+}) => {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (ref.current && ref.current.clientHeight > 0) {
@@ -130,8 +139,8 @@ export const MetadataAttrs = ({ metadata }: { metadata: SpanMetadata[] }) => {
 
         return (
           <MetadataAttrRow
-            key={`metadata-attr-${md.scope}-${md.kind}`}
-            kind={md.kind}
+            key={`metadata-attr-${md.scope}-${canonicalMetadataKind(md)}`}
+            kind={canonicalMetadataKind(md)}
             scope={md.scope}
             values={md.values}
             updatedAt={md.updatedAt}
@@ -139,6 +148,7 @@ export const MetadataAttrs = ({ metadata }: { metadata: SpanMetadata[] }) => {
           />
         );
       })}
+      {footer}
     </div>
   );
 };

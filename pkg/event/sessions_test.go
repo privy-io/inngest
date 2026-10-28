@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/inngest/inngest/pkg/consts"
@@ -131,4 +132,163 @@ func TestResolveSessionsThenValidate(t *testing.T) {
 		r.Contains(evt.Meta.Sessions, k, "manual keys always survive the merge")
 	}
 	r.NoError(evt.Validate(context.Background()))
+}
+
+// TestResolveSessionsTombstones exercises the RFC 7386 null-tombstone paths.
+// Tombstones are captured during JSON unmarshalling (a plain map[string]string
+// cannot hold null), so these cases start from wire JSON and resolve.
+func TestResolveSessionsTombstones(t *testing.T) {
+	cases := []struct {
+		name string
+		// meta is the raw JSON of an event's `meta` object.
+		meta string
+		want Sessions
+	}{
+		{
+			name: "per-key null cuts the matching propagated key",
+			meta: `{"sessions":{"conv_id":null},"propagated_sessions":{"conv_id":"123"}}`,
+			want: nil,
+		},
+		{
+			name: "per-key null leaves other propagated keys intact",
+			meta: `{"sessions":{"conv_id":null},"propagated_sessions":{"conv_id":"123","org_id":"42"}}`,
+			want: Sessions{"org_id": "42"},
+		},
+		{
+			name: "cut one and add another (manual value wins)",
+			meta: `{"sessions":{"conv_id":null,"new_id":"456"},"propagated_sessions":{"conv_id":"123"}}`,
+			want: Sessions{"new_id": "456"},
+		},
+		{
+			name: "whole-field null clears all propagated",
+			meta: `{"sessions":null,"propagated_sessions":{"a":"1","b":"2"}}`,
+			want: nil,
+		},
+		{
+			name: "empty object keeps propagated (RFC 7386 empty patch)",
+			meta: `{"sessions":{},"propagated_sessions":{"a":"1"}}`,
+			want: Sessions{"a": "1"},
+		},
+		{
+			name: "absent manual keeps propagated",
+			meta: `{"propagated_sessions":{"a":"1"}}`,
+			want: Sessions{"a": "1"},
+		},
+		{
+			name: "tombstone with no matching propagated key is a no-op",
+			meta: `{"sessions":{"ghost":null},"propagated_sessions":{"a":"1"}}`,
+			want: Sessions{"a": "1"},
+		},
+		{
+			name: "cuts never count against the cap: 4 cuts + 5 fills still yields 5",
+			meta: `{"sessions":{"w":null,"x":null,"y":null,"z":null},` +
+				`"propagated_sessions":{"a":"1","b":"1","c":"1","d":"1","e":"1"}}`,
+			want: Sessions{"a": "1", "b": "1", "c": "1", "d": "1", "e": "1"},
+		},
+		{
+			name: "numeric manual id is stringified alongside a cut",
+			meta: `{"sessions":{"conv_id":null,"n":7},"propagated_sessions":{"conv_id":"9"}}`,
+			want: Sessions{"n": "7"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
+
+			var m EventMeta
+			r.NoError(json.Unmarshal([]byte(tc.meta), &m))
+
+			m.ResolveSessions()
+
+			r.Equal(tc.want, m.Sessions)
+			r.Nil(m.PropagatedSessions, "propagated layer is always cleared")
+			r.Empty(m.sessionTombstones, "tombstones are consumed")
+			r.False(m.clearPropagated, "clear flag is reset")
+			r.NoError(m.Sessions.Validate(), "resolved manual layer is valid")
+		})
+	}
+}
+
+// TestResolveSessionsResolution pins the SessionsMetrics summary that drives
+// the adoption metric's tags. It starts from wire JSON because Nulling is
+// derived from the null tombstones, which only exist after unmarshalling.
+//
+// Manual and Nulling are deliberately independent: an event may set keys, null
+// keys, both, or neither. "Any manual interaction" is Manual || Nulling, and
+// clear-and-set within one event is Manual && Nulling.
+func TestResolveSessionsResolution(t *testing.T) {
+	cases := []struct {
+		name string
+		// meta is the raw JSON of an event's `meta` object.
+		meta string
+		want SessionsMetrics
+	}{
+		{
+			name: "absent meta is the empty denominator case",
+			meta: `{}`,
+			want: SessionsMetrics{},
+		},
+		{
+			name: "empty manual object is not an interaction (RFC 7386 empty patch)",
+			meta: `{"sessions":{}}`,
+			want: SessionsMetrics{},
+		},
+		{
+			name: "manual keys only",
+			meta: `{"sessions":{"conv_id":"123"}}`,
+			want: SessionsMetrics{Manual: true},
+		},
+		{
+			name: "propagated only",
+			meta: `{"propagated_sessions":{"conv_id":"123"}}`,
+			want: SessionsMetrics{Propagated: true},
+		},
+		{
+			name: "both layers present",
+			meta: `{"sessions":{"a":"1"},"propagated_sessions":{"b":"2"}}`,
+			want: SessionsMetrics{Manual: true, Propagated: true},
+		},
+		{
+			name: "per-key tombstone is nulling, not manual",
+			meta: `{"sessions":{"conv_id":null},"propagated_sessions":{"conv_id":"123"}}`,
+			want: SessionsMetrics{Nulling: true, Propagated: true},
+		},
+		{
+			name: "whole-field null is nulling, not manual",
+			meta: `{"sessions":null,"propagated_sessions":{"a":"1"}}`,
+			want: SessionsMetrics{Nulling: true, Propagated: true},
+		},
+		{
+			name: "clear-and-set in one event is both manual and nulling",
+			meta: `{"sessions":{"conv_id":null,"new_id":"456"},"propagated_sessions":{"conv_id":"123"}}`,
+			want: SessionsMetrics{Manual: true, Nulling: true, Propagated: true},
+		},
+		{
+			name: "nulling with nothing inherited still counts as an interaction",
+			meta: `{"sessions":{"ghost":null}}`,
+			want: SessionsMetrics{Nulling: true},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
+
+			var m EventMeta
+			r.NoError(json.Unmarshal([]byte(tc.meta), &m))
+
+			r.Equal(tc.want, m.ResolveSessions())
+		})
+	}
+}
+
+// TestParseManualSessionsRejectsBool ensures non-string/number/null manual
+// values are rejected, mirroring the propagated-layer decoding.
+func TestParseManualSessionsRejectsBool(t *testing.T) {
+	r := require.New(t)
+	var m EventMeta
+	err := json.Unmarshal([]byte(`{"sessions":{"flag":true}}`), &m)
+	r.Error(err)
+	r.Contains(err.Error(), "must be a string, number, or null")
 }

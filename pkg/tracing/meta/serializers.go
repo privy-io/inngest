@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"time"
 
@@ -44,6 +45,14 @@ type SerializableAttr struct {
 	value     any
 }
 
+func (s *SerializableAttr) Key() string {
+	return s.key
+}
+
+func (s *SerializableAttr) Value() any {
+	return s.value
+}
+
 // AddAttr adds an attribute to a set.  If the attribute key exists,
 // the value will be replaced.
 func AddAttr[T any](r *SerializableAttrs, attr attr[T], value T) {
@@ -73,6 +82,20 @@ func AddAttrIfUnset[T any](r *SerializableAttrs, attr attr[T], value T) {
 	newAttr := Attr(attr, value)
 	r.keyMap[attr.key] = len(r.Attrs)
 	r.Attrs = append(r.Attrs, newAttr)
+}
+
+func CopyFrom[T any](r *SerializableAttrs, other *SerializableAttrs, attr attr[*T]) bool {
+	if other == nil {
+		return false
+	}
+
+	val, ok := GetAttr(other, attr)
+	if !ok {
+		return false
+	}
+
+	AddAttr(r, attr, val)
+	return true
 }
 
 func GetAttr[T any](r *SerializableAttrs, attr attr[*T]) (*T, bool) {
@@ -156,16 +179,49 @@ type Serializer interface {
 	Key() string
 	SerializeValue(any) (attribute.KeyValue, bool)
 	DeserializeValue(any) (any, bool)
+
+	// Wrap wraps an attribute.Value into the appropriate type for the serializer.
+	// This is mostly used for JSON attributes, which are stored as strings but need to be wrapped into json.RawMessage
+	// for proper deserialization.
+	WrapValue(attribute.Value) any
 }
 
 type attr[T any] struct {
 	key         string
 	serialize   func(T) attribute.KeyValue
 	deserialize func(any) (T, bool)
+	wrap        func(attribute.Value) any
 }
 
 func (a attr[T]) Key() string {
 	return a.key
+}
+
+// isJSONEncoded reports whether the attribute's string value is itself a
+// JSON document: the attrs with a wrap func (JsonAttr), which wraps that
+// string as a json.RawMessage.
+func (a attr[T]) isJSONEncoded() bool { return a.wrap != nil }
+
+// JSONAttrKeys returns the keys of every JsonAttr in AttrsByKey: attributes
+// whose string value is itself a JSON document. A writer that stores
+// attributes as structured JSON (rather than OTel strings) can unwrap these.
+func JSONAttrKeys() []string {
+	var keys []string
+	for k, s := range AttrsByKey {
+		if j, ok := s.(interface{ isJSONEncoded() bool }); ok && j.isJSONEncoded() {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (a attr[T]) WrapValue(Value attribute.Value) any {
+	if a.wrap != nil {
+		return a.wrap(Value)
+	}
+
+	return Value.AsInterface()
 }
 
 func (a attr[T]) SerializeValue(v any) (attribute.KeyValue, bool) {
@@ -577,6 +633,12 @@ func JsonAttr[T any](key string) attr[*T] {
 			}
 
 			return nil, false
+		},
+		wrap: func(val attribute.Value) any {
+			if val.Type() != attribute.STRING {
+				return nil
+			}
+			return json.RawMessage(val.AsString())
 		},
 	}
 }

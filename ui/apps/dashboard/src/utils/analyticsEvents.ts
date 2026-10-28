@@ -55,8 +55,10 @@ import type { ScoreKind } from '@inngest/components/Experiments';
 
 // Alphabetical — this list is the only place a valid feature name is defined.
 export type AnalyticsFeature =
+  | 'account-concurrency'
   | 'ai-overview'
   | 'experiments'
+  | 'runs-ai-assist'
   | 'sandboxes'
   | 'scores'
   | 'sessions';
@@ -64,17 +66,20 @@ export type AnalyticsFeature =
 // Alphabetical — this list is the only place a valid event name is defined.
 // Feature names never appear here; `feature` carries that instead.
 type AnalyticsEventName =
+  | 'Assistant Action Performed'
+  | 'Banner CTA Clicked'
+  | 'Banner Dismissed'
+  | 'Banner Viewed'
   | 'Detail Viewed'
   | 'Docs Link Opened'
   | 'Empty State Docs Link Opened'
   | 'Empty State Example Copied'
   | 'Empty State Prompt Copied'
+  | 'Empty State Upgrade Clicked'
   | 'Empty State Viewed'
   | 'List Viewed'
   | 'Opened In Insights'
-  | 'Scoring Weight Updated'
-  | 'Waitlist Form Submitted'
-  | 'Waitlist Joined';
+  | 'Scoring Weight Updated';
 
 type AnalyticsEventProperties = Record<
   string,
@@ -91,7 +96,205 @@ function track(
       ([, value]) => value !== undefined,
     ),
   );
-  analytics.track(event, compactProperties);
+  return analytics.track(event, compactProperties);
+}
+
+export type AssistantAction =
+  | { action: 'viewed' | 'opened' | 'prompt_copy_clicked' | 'prompt_copied' }
+  | {
+      action:
+        | 'setup_clicked'
+        | 'setup_opened'
+        | 'setup_copied'
+        | 'setup_copy_failed';
+      client:
+        | 'chatgpt'
+        | 'chatgpt_codex'
+        | 'claude'
+        | 'claude_code'
+        | 'codex_cli'
+        | 'other';
+    }
+  | {
+      action: 'prompt_copy_failed';
+      failure_category: 'permission_denied' | 'unavailable' | 'other';
+    }
+  | {
+      action: 'guide_clicked';
+      guide: 'connection' | 'troubleshooting' | 'more_ai_resources';
+    };
+
+type AssistantActionPerformedArgs = {
+  feature: AnalyticsFeature;
+  accountId?: string;
+  surface: 'environment_runs' | 'function_runs' | 'run_details';
+  templateVersion: 'basic_v1' | 'run_debug_v1';
+  detailView?: 'inline' | 'standalone';
+  event: AssistantAction;
+};
+
+export function trackAssistantActionPerformed({
+  feature,
+  accountId,
+  surface,
+  templateVersion,
+  detailView,
+  event,
+}: AssistantActionPerformedArgs) {
+  return track('Assistant Action Performed', feature, {
+    ...event,
+    account_id: accountId,
+    surface,
+    template_version: templateVersion,
+    detail_view: detailView,
+  });
+}
+
+// Banner events are intentionally generic so any warning/info banner can reuse
+// them; `feature` and `bannerId` say which one fired.
+//
+// `Banner Viewed` is the denominator, and `impressionId` is what makes it one:
+// callers mint an id per appearance of the banner, emit `Banner Viewed` once
+// with it, and stamp it on the click and dismiss events that appearance
+// produces. Click and dismiss rates are then a straight count of impressions
+// that ended in that action, over impressions — the same unit on both sides.
+//
+// Two rules follow, and both matter:
+//   - Emit `Banner Viewed` on EVERY appearance. Deduping the view without
+//     deduping the actions inflates the rates without bound; if you want a
+//     per-user rate, group on Segment's userId downstream instead.
+//   - Send the impression's own snapshot of any context (signal strength, which
+//     CTAs it offered) on all three events, not a value re-read at click time,
+//     so a click can never describe a different state than the view it belongs
+//     to.
+type BannerViewedArgs = {
+  feature: AnalyticsFeature;
+  bannerId: string;
+  // The account the banner was shown to. Segment's identify() associates the
+  // user with an account, but that lives in Segment's identity graph, not on
+  // the event rows the warehouse materializes — those carry only `user_id`. So
+  // every query that compares banner exposure against an account-level outcome
+  // has to reconstruct the account from membership, and for a user who belongs
+  // to more than one account it can't be reconstructed at all. Reporting it
+  // here makes that join exact instead of inferred.
+  accountId?: string;
+  // Identifies this appearance of the banner. The click and dismiss events for
+  // the same appearance carry it too, which is what joins them to this view.
+  impressionId?: string;
+  scope?: string;
+  alertState?: string;
+  surface?: string;
+  minutesWithHits?: number;
+  windowMinutes?: number;
+  // Which CTAs the impression actually offered. A banner can vary its CTAs by
+  // account, so without these the clicks on a CTA only some viewers saw get
+  // divided by every impression, and the rate means nothing.
+  cta?: string;
+  secondaryCta?: string;
+};
+
+export function trackBannerViewed({
+  feature,
+  bannerId,
+  accountId,
+  impressionId,
+  scope,
+  alertState,
+  surface,
+  minutesWithHits,
+  windowMinutes,
+  cta,
+  secondaryCta,
+}: BannerViewedArgs) {
+  track('Banner Viewed', feature, {
+    banner_id: bannerId,
+    account_id: accountId,
+    impression_id: impressionId,
+    scope,
+    alert_state: alertState,
+    surface,
+    minutes_with_hits: minutesWithHits,
+    window_minutes: windowMinutes,
+    cta,
+    secondary_cta: secondaryCta,
+  });
+}
+
+type BannerDismissedArgs = {
+  feature: AnalyticsFeature;
+  bannerId: string;
+  // See BannerViewedArgs — the outcome side of the join needs it on the
+  // reaction too, not just the impression.
+  accountId?: string;
+  impressionId?: string;
+  scope?: string;
+  // The impression's own snapshot, repeated here so a dismiss rate can be cut
+  // by signal strength without joining back to `Banner Viewed`.
+  minutesWithHits?: number;
+  windowMinutes?: number;
+};
+
+export function trackBannerDismissed({
+  feature,
+  bannerId,
+  accountId,
+  impressionId,
+  scope,
+  minutesWithHits,
+  windowMinutes,
+}: BannerDismissedArgs) {
+  track('Banner Dismissed', feature, {
+    banner_id: bannerId,
+    account_id: accountId,
+    impression_id: impressionId,
+    scope,
+    minutes_with_hits: minutesWithHits,
+    window_minutes: windowMinutes,
+  });
+}
+
+type BannerCTAClickedArgs = {
+  feature: AnalyticsFeature;
+  bannerId: string;
+  // See BannerViewedArgs.
+  accountId?: string;
+  impressionId?: string;
+  scope?: string;
+  alertState?: string;
+  surface?: string;
+  // The impression's own snapshot — see BannerDismissedArgs.
+  minutesWithHits?: number;
+  windowMinutes?: number;
+  // Which CTA was clicked, for banners offering more than one. Deliberately a
+  // property rather than a per-CTA event name: total click-through stays a
+  // single number that shares the `Banner Viewed` denominator, and per-CTA
+  // rates are a breakdown of it.
+  cta: string;
+};
+
+export function trackBannerCTAClicked({
+  feature,
+  bannerId,
+  accountId,
+  impressionId,
+  scope,
+  alertState,
+  surface,
+  minutesWithHits,
+  windowMinutes,
+  cta,
+}: BannerCTAClickedArgs) {
+  track('Banner CTA Clicked', feature, {
+    banner_id: bannerId,
+    account_id: accountId,
+    impression_id: impressionId,
+    scope,
+    alert_state: alertState,
+    surface,
+    minutes_with_hits: minutesWithHits,
+    window_minutes: windowMinutes,
+    cta,
+  });
 }
 
 type EmptyStateViewedArgs = { feature: AnalyticsFeature };
@@ -114,6 +317,14 @@ export function trackEmptyStateExampleCopied({
   feature,
 }: EmptyStateExampleCopiedArgs) {
   track('Empty State Example Copied', feature);
+}
+
+type EmptyStateUpgradeClickedArgs = { feature: AnalyticsFeature };
+
+export function trackEmptyStateUpgradeClicked({
+  feature,
+}: EmptyStateUpgradeClickedArgs) {
+  track('Empty State Upgrade Clicked', feature);
 }
 
 type EmptyStateDocsLinkOpenedArgs = { feature: AnalyticsFeature };
@@ -195,27 +406,4 @@ type DocsLinkOpenedArgs = { feature: AnalyticsFeature };
 
 export function trackDocsLinkOpened({ feature }: DocsLinkOpenedArgs) {
   track('Docs Link Opened', feature);
-}
-
-type WaitlistJoinedArgs = { feature: AnalyticsFeature };
-
-export function trackWaitlistJoined({ feature }: WaitlistJoinedArgs) {
-  track('Waitlist Joined', feature);
-}
-
-type WaitlistFormSubmittedArgs = {
-  feature: AnalyticsFeature;
-  canContact: boolean;
-  message: string;
-};
-
-export function trackWaitlistFormSubmitted({
-  feature,
-  canContact,
-  message,
-}: WaitlistFormSubmittedArgs) {
-  track('Waitlist Form Submitted', feature, {
-    can_contact: canContact,
-    message: message,
-  });
 }

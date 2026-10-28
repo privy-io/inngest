@@ -1,8 +1,12 @@
 package batch
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,6 +18,7 @@ import (
 	"github.com/inngest/inngest/pkg/event"
 	"github.com/inngest/inngest/pkg/execution/state/redis_state"
 	"github.com/inngest/inngest/pkg/inngest"
+	"github.com/inngest/inngest/pkg/logger"
 	"github.com/oklog/ulid/v2"
 	"github.com/redis/rueidis"
 	"github.com/stretchr/testify/require"
@@ -25,6 +30,95 @@ func TestMain(m *testing.M) {
 		goleak.IgnoreTopFunction("github.com/karlseguin/ccache/v2.(*Cache).worker"),
 		goleak.IgnoreTopFunction("github.com/redis/rueidis.(*call).LazyDo.func1"),
 	)
+}
+
+type scheduleErrorBatchManager struct {
+	BatchManager
+	err error
+}
+
+func (m scheduleErrorBatchManager) BulkAppend(context.Context, []BatchItem, inngest.Function) (*BulkAppendResult, error) {
+	return &BulkAppendResult{
+		Status:       "new",
+		BatchID:      ulid.Make().String(),
+		BatchPointer: "batch-pointer",
+		Committed:    1,
+	}, nil
+}
+
+func (m scheduleErrorBatchManager) ScheduleExecution(context.Context, ScheduleBatchOpts) error {
+	return m.err
+}
+
+func TestScheduleBatchExecutionErrorLog(t *testing.T) {
+	var output bytes.Buffer
+	log := logger.FromSlog(slog.New(slog.NewJSONHandler(&output, nil)), slog.LevelDebug)
+	buffer := newAppendBuffer(time.Second, 1, 1, log)
+	batchID := ulid.MustParse("01K0T21HZW9DHDZ5P5TQKBN1E6")
+	functionID := uuid.MustParse("2bbf4f69-6e0d-466f-9cdd-2cfa2f684c8b")
+	scheduledAt := time.Date(2026, time.August, 13, 12, 30, 0, 0, time.UTC)
+
+	// Return a synthetic scheduling failure to exercise the scheduleErr != nil logging path.
+	require.NotPanics(t, func() {
+		err := buffer.scheduleBatchExecution(
+			context.Background(),
+			scheduleErrorBatchManager{err: errors.New("schedule failed")},
+			batchID.String(),
+			&BulkAppendResult{BatchPointer: "pointer"},
+			BatchItem{},
+			inngest.Function{ID: functionID},
+			scheduledAt,
+			"new",
+		)
+		require.ErrorContains(t, err, "schedule failed")
+	})
+
+	entry := map[string]any{}
+	require.NoError(t, json.Unmarshal(output.Bytes(), &entry))
+	require.Equal(t, "schedule failed", entry["error"])
+	require.Equal(t, batchID.String(), entry["batchID"])
+	require.Equal(t, functionID.String(), entry["function_id"])
+	require.Equal(t, "new", entry["schedule_type"])
+	require.Equal(t, scheduledAt.Format(time.RFC3339), entry["scheduled_at"])
+}
+
+func TestAppendBufferFlushReturnsSchedulingError(t *testing.T) {
+	scheduleErr := errors.New("queue unavailable")
+	pending := &pendingResult{done: make(chan struct{})}
+	fn := inngest.Function{
+		ID: uuid.New(),
+		EventBatch: &inngest.EventBatchConfig{
+			MaxSize: 10,
+			Timeout: "30s",
+		},
+	}
+	item := BatchItem{
+		WorkspaceID: uuid.New(),
+		FunctionID:  fn.ID,
+		EventID:     ulid.Make(),
+	}
+	buf := &batchBuffer{
+		items: []pendingItem{{
+			item:    item,
+			fn:      fn,
+			pending: pending,
+		}},
+		pendingResults: map[string]*pendingResult{item.EventID.String(): pending},
+		fn:             fn,
+		createdAt:      time.Now(),
+	}
+	buffer := newAppendBuffer(time.Second, 10, 1024, logger.VoidLogger())
+	buffer.totalPendingItems.Store(1)
+
+	buffer.flush(buf, scheduleErrorBatchManager{err: scheduleErr}, "timer")
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("flush did not notify the pending append")
+	case <-pending.done:
+		// flush completed and notified the pending append
+	}
+	require.ErrorIs(t, pending.err, scheduleErr)
 }
 
 func TestBulkAppend(t *testing.T) {
@@ -940,7 +1034,7 @@ func TestBufferedBatchManagerMultipleBufferKeys(t *testing.T) {
 		EventBatch: &inngest.EventBatchConfig{
 			MaxSize: 10,
 			Timeout: "60s",
-			Key:     strPtr("event.data.tenant"),
+			Key:     new("event.data.tenant"),
 		},
 	}
 
@@ -1047,6 +1141,7 @@ func TestBufferedByteSize(t *testing.T) {
 
 		// Should have flushed quickly via byte-size, not waited 5s for timer
 		require.Less(t, elapsed, 500*time.Millisecond, "should flush on byte size, not wait for timer")
+		require.Zero(t, buffered.(*redisBatchManager).buffer.totalPendingBytes.Load())
 	})
 
 	t.Run("byte size resets after flush", func(t *testing.T) {
@@ -1116,5 +1211,62 @@ func TestBufferedByteSize(t *testing.T) {
 
 		// If byte size wasn't reset, second batch would wait for the 5s timer
 		require.Less(t, elapsed, 500*time.Millisecond, "second batch should flush on byte size too")
+		require.Zero(t, buffered.(*redisBatchManager).buffer.totalPendingBytes.Load())
 	})
+}
+
+func TestBufferedOverflowScheduling(t *testing.T) {
+	r := miniredis.RunT(t)
+	rc, err := rueidis.NewClient(rueidis.ClientOption{
+		InitAddress:  []string{r.Addr()},
+		DisableCache: true,
+	})
+	require.NoError(t, err)
+	defer rc.Close()
+
+	ctx := context.Background()
+	bc := redis_state.NewBatchClient(rc, redis_state.QueueDefaultKey)
+
+	fnID := uuid.New()
+	fn := inngest.Function{
+		ID:         fnID,
+		EventBatch: &inngest.EventBatchConfig{MaxSize: 3, Timeout: "60s"},
+	}
+	newItem := func() BatchItem {
+		return BatchItem{FunctionID: fnID, EventID: ulid.Make()}
+	}
+
+	// 2/3 full, so the next flush of 3 overflows.
+	prefill, err := NewRedisBatchManager(bc, nil, WithoutBuffer()).BulkAppend(ctx, []BatchItem{newItem(), newItem()}, fn)
+	require.NoError(t, err)
+
+	q := &fakeProducer{}
+	buffered := NewRedisBatchManager(bc, q, WithBufferSettings(5*time.Second, 3))
+	defer buffered.Close()
+
+	var wg sync.WaitGroup
+	errs := make([]error, 3)
+	for i := range errs {
+		wg.Go(func() {
+			_, errs[i] = buffered.Append(ctx, newItem(), fn)
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+
+	require.Len(t, q.items, 2)
+
+	full := q.items[0].item.Payload.(ScheduleBatchPayload)
+	require.Equal(t, prefill.BatchID, full.BatchID.String())
+	require.WithinDuration(t, time.Now(), q.items[0].at, 5*time.Second)
+
+	next := q.items[1].item.Payload.(ScheduleBatchPayload)
+	require.NotEqual(t, full.BatchID, next.BatchID)
+	require.WithinDuration(t, time.Now().Add(time.Minute), q.items[1].at, 5*time.Second)
+
+	items, err := buffered.RetrieveItems(ctx, fnID, next.BatchID)
+	require.NoError(t, err)
+	require.Len(t, items, 2)
 }

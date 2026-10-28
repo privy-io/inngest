@@ -3,6 +3,64 @@
 
 package types
 
+// From kind.go
+// Scores & warnings get one kind per score name / warning code so each can be
+// replaced on its own (IE `inngest.score.<name>`, `inngest.warning.<code>`).
+const KindPrefixInngestScore = "inngest.score."
+
+// From kind.go
+const KindPrefixInngestWarning = "inngest.warning."
+
+// From sandbox.go
+const (
+	KindInngestSandbox = "inngest.sandbox"
+)
+
+// From sandbox.go
+// SandboxMetadata describes a step that acted on an Inngest sandbox. The SDK
+// emits it, one entry per step attempt with the attempt's full value set, as
+// merges never clear a key. Values stay flat (scalars and string arrays) so
+// they round-trip through ClickHouse JSON and DuckDB VARIANT storage.
+type SandboxMetadata struct {
+	// Version of this shape. Currently 1.
+	Version int `json:"version"`
+
+	// Action is the sandbox API operation, like "exec" or "snapshot.create".
+	Action string `json:"action"`
+
+	// Method is the SDK method the user called, like "commands.run".
+	Method string `json:"method"`
+
+	// SandboxID identifies the machine and is shared by every step on it. A
+	// failed create has only the name.
+	SandboxID   string `json:"sandbox_id,omitempty"`
+	SandboxName string `json:"sandbox_name,omitempty"`
+
+	// SourceSnapshotID is the snapshot a created sandbox was cloned from.
+	SourceSnapshotID string `json:"source_snapshot_id,omitempty"`
+
+	// Command is the argv that ran; CommandDisplay is the shell string the user
+	// wrote, if any. CommandTruncated is true when either was cut short.
+	Command          []string `json:"command,omitempty"`
+	CommandDisplay   string   `json:"command_display,omitempty"`
+	CommandTruncated bool     `json:"command_truncated,omitempty"`
+	Cwd              string   `json:"cwd,omitempty"`
+
+	ProcessID         string `json:"process_id,omitempty"`
+	ProcessState      string `json:"process_state,omitempty"`
+	ExitCode          *int   `json:"exit_code,omitempty"`
+	TerminationSignal *int   `json:"termination_signal,omitempty"`
+
+	// OutputTruncated is true when captured stdout/stderr was cut short.
+	OutputTruncated bool `json:"output_truncated,omitempty"`
+
+	SnapshotID     string `json:"snapshot_id,omitempty"`
+	SnapshotStatus string `json:"snapshot_status,omitempty"`
+
+	// ErrorCode is the sandbox API's error code when the step failed.
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
 // From score.go
 const (
 	KindInngestScore = "inngest.score"
@@ -56,6 +114,32 @@ type AIMetadata struct {
 	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
 	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
 	Seed             *int64   `json:"seed,omitempty"`
+}
+
+// From ai_summary.go
+const (
+	// KindInngestAISummary is the run-scoped rollup of all AI usage within a
+	// run. It is synthesized every time a run's span tree is read and is never
+	// persisted, so it can never double-count itself. It must never be added
+	// to the allowedInngestKinds allowlist.
+	KindInngestAISummary = "inngest.ai.summary"
+)
+
+// From ai_summary.go
+type AISummaryMetadata struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+	TotalTokens  int64 `json:"total_tokens"`
+
+	// Absent when no call reported them; cache tokens are summed raw and never
+	// reconciled against InputTokens.
+	CacheReadTokens     *int64 `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens *int64 `json:"cache_creation_tokens,omitempty"`
+	ReasoningTokens     *int64 `json:"reasoning_tokens,omitempty"`
+
+	EstimatedCost *float64 `json:"estimated_cost,omitempty"`
+	Models        []string `json:"models,omitempty"`
+	Providers     []string `json:"providers,omitempty"`
 }
 
 // From experiment.go

@@ -31,7 +31,6 @@ type Query {
     after: String
     orderBy: [RunsV2OrderBy!]!
     filter: RunsFilterV2!
-    preview: Boolean
   ): RunsV2Connection!
   # runsMetrics(filter: RunsFilterV2!): MetricsResponse!
   run(runID: String!): FunctionRunV2
@@ -39,8 +38,19 @@ type Query {
   runTrigger(runID: String!): RunTraceTrigger!
   runTrace(runID: String!): RunTraceSpan!
 
-  debugRun(query: DebugRunQuery!): DebugRun
-  debugSession(query: DebugSessionQuery!): DebugSession
+  insights(sql: String!): InsightsQueryResult!
+
+  sessionKeys(search: String): [SessionKey!]!
+  sessions(
+    sessionKey: String!
+    sessionIdSearch: String
+    timeRange: TimeRangeInput
+  ): [SessionGroup!]!
+  sessionRuns(
+    sessionKey: String!
+    sessionId: String!
+    timeRange: TimeRangeInput
+  ): [SessionRun!]!
 
   workerConnections(
     first: Int! = 100
@@ -72,20 +82,6 @@ input FunctionQuery {
   functionSlug: String!
 }
 
-input DebugRunQuery {
-  workspaceId: ID! = "local"
-  functionSlug: String!
-  debugRunID: String
-  runID: String
-}
-
-input DebugSessionQuery {
-  workspaceId: ID! = "local"
-  functionSlug: String!
-  debugSessionID: String
-  runID: String
-}
-
 input FunctionRunQuery {
   workspaceId: ID! = "local"
   functionRunId: ID!
@@ -93,6 +89,11 @@ input FunctionRunQuery {
 
 input FunctionRunsQuery {
   workspaceId: ID! = "local"
+}
+
+input TimeRangeInput {
+  from: Time!
+  until: Time
 }
 
 input StreamQuery {

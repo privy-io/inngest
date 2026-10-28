@@ -36,8 +36,10 @@ import { ViewToggle, type ViewMode } from '@/components/InsightsMetrics/ViewTogg
 import { formatCompactNumber } from '@/components/InfraDashboard/utils';
 import { useEnvironment } from '@/components/Environments/environment-context';
 import {
+  COST_TOOLTIP,
   formatCost,
   formatCostAxis,
+  formatCostAxisBar,
   formatMs,
   formatSeconds,
   formatSecondsAxis,
@@ -49,12 +51,12 @@ import { renderFunctionLink, renderRunLink } from '@/components/AIOverview/rende
 
 const DEFAULT_DURATION = { days: 7 };
 
-// "Cost over time" gets twice the buckets of every other trend chart here —
+// "Estimated cost over time" gets twice the buckets of every other trend chart here —
 // it's the sole full-width chart in the Cost section, so it has the
 // horizontal room to render a finer-grained trend.
 const COST_TREND_BUCKET_LIMIT = TREND_BUCKET_LIMIT * 2;
 
-// Shared by "Cost over time" and "Cost by model" — both plot ai_token_trend/
+// Shared by "Estimated cost over time" and "Estimated cost by model" — both plot ai_token_trend/
 // ai_model_distribution's `cost` column, which carries input/output tokens
 // alongside it in the same row, so the tooltip can show token counts
 // without adding a visual series for them.
@@ -141,7 +143,7 @@ export const FunctionAI = ({ functionSlug }: Props) => {
     pause,
   });
   // Separate from tokenTrend (same registry key, double the buckets) so
-  // "Cost over time" can render at finer granularity than "Tokens over
+  // "Estimated cost over time" can render at finer granularity than "Tokens over
   // time" without doubling the latter's bucket count too.
   const costTrend = useInsightsMetric('ai_token_trend', {
     workspaceID,
@@ -237,7 +239,7 @@ export const FunctionAI = ({ functionSlug }: Props) => {
 
   if (isFetchingFunction) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <LoadingIcon />
       </div>
     );
@@ -252,10 +254,10 @@ export const FunctionAI = ({ functionSlug }: Props) => {
   }
 
   return (
-    <div className="bg-canvasBase mx-auto flex h-full w-full max-w-[1500px] flex-col px-6">
-      {error && <Error message="There was an error loading this function's AI metrics." />}
+    <div className="bg-canvasBase no-scrollbar min-h-0 w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+      <div className="mx-auto w-full max-w-[1500px] px-6 pb-6">
+        {error && <Error message="There was an error loading this function's AI metrics." />}
 
-      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden">
         <div className="bg-canvasBase flex flex-row items-center gap-1.5 pb-3 pt-6">
           <SelectGroup>
             <span className="border-muted bg-modalBase text-muted box-content flex h-[24px] items-center rounded border px-1.5 text-[13px]">
@@ -396,7 +398,8 @@ export const FunctionAI = ({ functionSlug }: Props) => {
         <SectionGroupHeading>Cost</SectionGroupHeading>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Section
-            title="Cost over time"
+            title="Estimated cost over time"
+            tooltip={COST_TOOLTIP}
             className="lg:col-span-2"
             query={costTrend.data?.query}
             queryName="AI cost over time"
@@ -407,7 +410,7 @@ export const FunctionAI = ({ functionSlug }: Props) => {
               hasData={hasAnyCalls}
               chartType="bar"
               format={formatCost}
-              axisFormat={formatCostAxis}
+              axisFormat={formatCostAxisBar}
               allowDecimals
               series={[
                 {
@@ -421,7 +424,8 @@ export const FunctionAI = ({ functionSlug }: Props) => {
             />
           </Section>
           <Section
-            title="Cost per run over time"
+            title="Estimated cost per run over time"
+            tooltip={COST_TOOLTIP}
             query={costPerRunTrend.data?.query}
             queryName="AI cost per run over time"
           >
@@ -436,13 +440,19 @@ export const FunctionAI = ({ functionSlug }: Props) => {
               defaultValue={0}
             />
           </Section>
-          <Section title="Cost by model" query={modelDistribution.data?.query} queryName="AI cost by model">
+          <Section
+            title="Estimated cost by model"
+            tooltip={COST_TOOLTIP}
+            query={modelDistribution.data?.query}
+            queryName="AI cost by model"
+          >
             <CategoricalChart
               items={toListItems(modelDistribution.data)}
               isLoading={modelDistribution.fetching && !modelDistribution.data}
               valueName="cost"
               colors={CHART_COLORS}
               format={formatCost}
+              valueLabelFormat={formatCostAxisBar}
               tooltipExtras={TOKEN_TOOLTIP_EXTRAS}
               showYAxisLine={false}
               showTooltipValueName={false}
@@ -451,6 +461,7 @@ export const FunctionAI = ({ functionSlug }: Props) => {
           </Section>
           <Section
             title="Most expensive runs"
+            tooltip={COST_TOOLTIP}
             query={mostExpensiveRuns.data?.query}
             queryName="AI most expensive runs"
           >
@@ -473,6 +484,7 @@ export const FunctionAI = ({ functionSlug }: Props) => {
           </Section>
           <Section
             title="Most expensive steps"
+            tooltip={COST_TOOLTIP}
             query={mostExpensiveSteps.data?.query}
             queryName="AI most expensive steps"
           >

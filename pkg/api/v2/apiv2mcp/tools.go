@@ -53,6 +53,11 @@ func tool(endpoint apiv2endpoint.Endpoint, includeEnv bool) *mcp.Tool {
 	}
 
 	readOnly := endpoint.HTTPMethod == http.MethodGet
+	idempotent := readOnly || endpoint.HTTPMethod == http.MethodPut || endpoint.HTTPMethod == http.MethodDelete
+	// pause and resume are idempotent despite post
+	if endpoint.MethodName == "PauseFunction" || endpoint.MethodName == "ResumeFunction" {
+		idempotent = true
+	}
 	return &mcp.Tool{
 		Name:        endpoint.ToolName,
 		Title:       endpoint.Summary,
@@ -60,9 +65,9 @@ func tool(endpoint apiv2endpoint.Endpoint, includeEnv bool) *mcp.Tool {
 		InputSchema: inputSchema(endpoint, includeEnv),
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    readOnly,
-			DestructiveHint: boolPointer(!readOnly),
-			IdempotentHint:  readOnly || endpoint.HTTPMethod == http.MethodPut || endpoint.HTTPMethod == http.MethodDelete,
-			OpenWorldHint:   boolPointer(false),
+			DestructiveHint: new(!readOnly),
+			IdempotentHint:  idempotent,
+			OpenWorldHint:   new(false),
 		},
 	}
 }
@@ -76,7 +81,7 @@ func inputSchema(endpoint apiv2endpoint.Endpoint, includeEnv bool) map[string]an
 	if includeEnv {
 		properties["env"] = map[string]any{
 			"type":        "string",
-			"description": "Environment slug. Defaults to the production environment for account-scoped credentials.",
+			"description": "Environment slug. Required for environment-specific tools when the credential can access all environments.",
 		}
 	}
 	required := []string{}
@@ -243,8 +248,18 @@ func fieldSchema(field protoreflect.FieldDescriptor, seen map[protoreflect.FullN
 	if field.IsList() && !field.IsMap() {
 		schema = map[string]any{"type": "array", "items": schema}
 	}
+	if values := apiv2endpoint.FieldEnum(field); len(values) > 0 {
+		target := schema
+		if items, ok := schema["items"].(map[string]any); ok {
+			target = items
+		}
+		target["enum"] = values
+	}
 	if description := apiv2endpoint.FieldDescription(field); description != "" {
 		schema["description"] = description
+	}
+	if apiv2endpoint.IsDeprecated(field) {
+		schema["deprecated"] = true
 	}
 	return schema
 }
@@ -335,8 +350,4 @@ func ToolError(message string, structured any) *mcp.CallToolResult {
 		StructuredContent: structured,
 		IsError:           true,
 	}
-}
-
-func boolPointer(value bool) *bool {
-	return &value
 }

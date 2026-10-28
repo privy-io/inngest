@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ import (
 	state "github.com/inngest/inngest/pkg/execution/state/v2"
 	"github.com/inngest/inngest/pkg/tracing/meta"
 	"github.com/inngest/inngest/pkg/util"
+	v2pb "github.com/inngest/inngest/proto/gen/api/v2"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -40,6 +42,7 @@ type runProviderDataReader interface {
 	runSpanReader
 	GetFunctionRun(ctx context.Context, accountID uuid.UUID, workspaceID uuid.UUID, runID ulid.ULID) (*cqrs.FunctionRun, error)
 	GetFunctionByInternalUUID(ctx context.Context, fnID uuid.UUID) (*cqrs.Function, error)
+	GetFunctionsBySlugs(ctx context.Context, slugs []string) ([]*cqrs.Function, error)
 	GetEventByInternalID(ctx context.Context, internalID ulid.ULID) (*cqrs.Event, error)
 	GetRuns(ctx context.Context, opts cqrs.GetTraceRunOpt) ([]*cqrs.TraceRun, error)
 }
@@ -87,6 +90,11 @@ func (p *runProvider) GetRuns(ctx context.Context, opts apiv2.GetRunsOpts) (*api
 		return nil, err
 	}
 
+	statuses, err := runStatusesForCQRS(opts.Status)
+	if err != nil {
+		return nil, err
+	}
+
 	from := time.Time{}
 	if opts.From != nil {
 		from = *opts.From
@@ -110,7 +118,8 @@ func (p *runProvider) GetRuns(ctx context.Context, opts apiv2.GetRunsOpts) (*api
 			TimeField:    timeField,
 			From:         from,
 			Until:        until,
-			Status:       opts.Status,
+			Status:       statuses,
+			CEL:          opts.CEL,
 			IsDeferred:   opts.IsDeferred,
 		},
 		Order: []cqrs.GetTraceRunOrder{{
@@ -122,12 +131,54 @@ func (p *runProvider) GetRuns(ctx context.Context, opts apiv2.GetRunsOpts) (*api
 		IncludeOutput: opts.IncludeOutput,
 	})
 	if err != nil {
+		if errors.Is(err, cqrs.ErrInvalidRunExpression) {
+			return nil, fmt.Errorf("%w: %v", apiv2.ErrExpressionInvalid, err)
+		}
 		return nil, err
+	}
+
+	includeDeferredFrom := slices.Contains(opts.Include, apiv2.RunListIncludeDeferredFrom)
+	// TODO: Deferred child traces currently retain only the parent function slug,
+	// even though the scheduling event also contains the parent app and function
+	// IDs. In practice, SDK registrations use app-qualified function slugs, so
+	// this lookup is unambiguous today. Persist stable parent identity on the child
+	// trace instead of relying on that naming convention long term.
+	deferredFunctionNames := map[string]string{}
+	if includeDeferredFrom {
+		// Resolve all parent names in one query. Missing functions keep their slug
+		// so clients still have useful context after a parent is deleted.
+		deferredFunctionSlugs := make([]string, 0)
+		seen := map[string]struct{}{}
+		for _, row := range rows {
+			slug := row.DeferParentFunctionSlug
+			if slug == "" {
+				continue
+			}
+			if _, ok := seen[slug]; ok {
+				continue
+			}
+			seen[slug] = struct{}{}
+			deferredFunctionSlugs = append(deferredFunctionSlugs, slug)
+		}
+
+		if len(deferredFunctionSlugs) > 0 {
+			functions, err := p.data.GetFunctionsBySlugs(ctx, deferredFunctionSlugs)
+			if err != nil {
+				return nil, err
+			}
+			for _, function := range functions {
+				deferredFunctionNames[function.Slug] = function.Name
+			}
+		}
 	}
 
 	runs := make([]*apiv2.RunListItem, 0, len(rows))
 	for _, row := range rows {
-		runs = append(runs, runListItemFromCQRS(row, opts.IncludeOutput))
+		run := runListItemFromCQRS(row, opts.IncludeOutput, includeDeferredFrom)
+		if run.DeferredFrom != nil {
+			run.DeferredFrom.FunctionName = deferredFunctionNames[run.DeferredFrom.FunctionSlug]
+		}
+		runs = append(runs, run)
 	}
 
 	hasMore := len(runs) > opts.Limit
@@ -139,6 +190,33 @@ func (p *runProvider) GetRuns(ctx context.Context, opts apiv2.GetRunsOpts) (*api
 		Runs:    runs,
 		HasMore: hasMore,
 	}, nil
+}
+
+func runStatusesForCQRS(statuses []v2pb.FunctionRunStatus) ([]enums.RunStatus, error) {
+	result := make([]enums.RunStatus, 0, len(statuses))
+	for _, status := range statuses {
+		switch status {
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_QUEUED:
+			result = append(result, enums.RunStatusScheduled)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_RUNNING:
+			result = append(result, enums.RunStatusRunning)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_COMPLETED:
+			result = append(result, enums.RunStatusCompleted)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_FAILED:
+			result = append(result, enums.RunStatusFailed)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_CANCELLED:
+			result = append(result, enums.RunStatusCancelled)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_SKIPPED:
+			result = append(result, enums.RunStatusSkipped)
+		case v2pb.FunctionRunStatus_FUNCTION_RUN_STATUS_PAUSED:
+			// PAUSED is function state, not a persisted run status. Cloud can query
+			// RUNNING rows and post-filter using persisted function pause state. Although
+			// the shared DeployedFunction exposes PausedAt, the dev server's cqrs.Function
+			// has no pause field, so this provider cannot do the same.
+			return nil, apiv2.ErrPausedRunStatusNotSupported
+		}
+	}
+	return result, nil
 }
 
 func cqrsRunTimeField(field apiv2.RunTimeField) (enums.TraceRunTime, error) {
@@ -244,7 +322,7 @@ func functionRunFromSpan(ctx context.Context, reader runSpanReader, runID ulid.U
 		root.Attributes = &meta.ExtractedValues{}
 	}
 
-	span, err := loader.ConvertRunSpan(ctx, root)
+	span, err := loader.ConvertRunSpanFor(ctx, reader, root)
 	if err != nil {
 		return nil, fmt.Errorf("error converting run span: %w", err)
 	}
@@ -296,15 +374,18 @@ func runEventID(root *cqrs.OtelSpan) (ulid.ULID, error) {
 	return eventID, nil
 }
 
-func runListItemFromCQRS(row *cqrs.TraceRun, includeOutput bool) *apiv2.RunListItem {
+func runListItemFromCQRS(row *cqrs.TraceRun, includeOutput, includeDeferredFrom bool) *apiv2.RunListItem {
 	runID, _ := ulid.Parse(row.RunID)
 	run := &apiv2.RunListItem{
 		RunID:        runID,
 		Cursor:       row.Cursor,
+		QueuedAt:     row.QueuedAt,
 		RunStartedAt: row.StartedAt,
 		FunctionID:   row.FunctionID.String(),
+		FunctionSlug: row.FunctionSlug,
 		AppID:        row.AppID.String(),
 		Status:       row.Status,
+		IsDeferred:   &row.IsDeferred,
 	}
 	if len(row.TriggerIDs) > 0 {
 		run.EventID, _ = ulid.Parse(row.TriggerIDs[0])
@@ -329,6 +410,11 @@ func runListItemFromCQRS(row *cqrs.TraceRun, includeOutput bool) *apiv2.RunListI
 	}
 	if includeOutput && len(row.Output) > 0 {
 		run.Output = publicRunOutput(row.Output)
+	}
+	if includeDeferredFrom && row.DeferParentFunctionSlug != "" {
+		run.DeferredFrom = &apiv2.RunDeferredFrom{
+			FunctionSlug: row.DeferParentFunctionSlug,
+		}
 	}
 
 	return run

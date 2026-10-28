@@ -233,6 +233,14 @@ func (pq *pgQuerier) GetFunctions(ctx context.Context) ([]*db.Function, error) {
 	return convertSlice(rows, functionFromPG), nil
 }
 
+func (pq *pgQuerier) GetFunctionsBySlugs(ctx context.Context, slugs []string) ([]*db.Function, error) {
+	rows, err := pq.q.GetFunctionsBySlugs(ctx, slugs)
+	if err != nil {
+		return nil, err
+	}
+	return convertSlice(rows, functionFromPG), nil
+}
+
 func (pq *pgQuerier) UpsertFunction(ctx context.Context, arg db.UpsertFunctionParams) (*db.Function, error) {
 	r, err := pq.q.UpsertFunction(ctx, sqlc.UpsertFunctionParams{
 		ID: arg.ID, AppID: arg.AppID, Name: arg.Name,
@@ -596,42 +604,6 @@ func (pq *pgQuerier) GetSpansByRunIDsAndName(ctx context.Context, runIDs []strin
 			RunID: r.RunID, TraceID: r.TraceID, DynamicSpanID: r.DynamicSpanID,
 			StartTime: toTime(r.SpanStartTime), EndTime: toTime(r.SpanEndTime), ParentSpanID: r.ParentSpanID,
 			SpanFragments: r.SpanFragments,
-		}
-	}
-	return out, nil
-}
-
-func (pq *pgQuerier) GetSpansByDebugRunID(ctx context.Context, debugRunID sql.NullString) ([]*db.SpanRow, error) {
-	// Postgres sqlc expects string for this query.
-	rows, err := pq.q.GetSpansByDebugRunID(ctx, debugRunID.String)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*db.SpanRow, len(rows))
-	for i, r := range rows {
-		out[i] = &db.SpanRow{
-			RunID: r.RunID, TraceID: r.TraceID, DynamicSpanID: r.DynamicSpanID,
-			StartTime: toTime(r.StartTime), EndTime: toTime(r.EndTime), ParentSpanID: r.ParentSpanID,
-			SpanFragments: r.SpanFragments,
-			DebugRunID:    debugRunID, DebugSessionID: r.DebugSessionID,
-		}
-	}
-	return out, nil
-}
-
-func (pq *pgQuerier) GetSpansByDebugSessionID(ctx context.Context, debugSessionID sql.NullString) ([]*db.SpanRow, error) {
-	// Postgres sqlc expects string for this query.
-	rows, err := pq.q.GetSpansByDebugSessionID(ctx, debugSessionID.String)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*db.SpanRow, len(rows))
-	for i, r := range rows {
-		out[i] = &db.SpanRow{
-			RunID: r.RunID, TraceID: r.TraceID, DynamicSpanID: r.DynamicSpanID,
-			StartTime: toTime(r.StartTime), EndTime: toTime(r.EndTime), ParentSpanID: r.ParentSpanID,
-			SpanFragments: r.SpanFragments,
-			DebugRunID:    r.DebugRunID, DebugSessionID: debugSessionID,
 		}
 	}
 	return out, nil

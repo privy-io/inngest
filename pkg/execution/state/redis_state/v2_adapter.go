@@ -26,7 +26,17 @@ end
 return 0
 `
 
-var releaseFinalizationClaimScript = NewClusterLuaScript(releaseFinalizationClaimLua)
+const cleanupOldIdempotencyKeyLua = `
+if redis.call("GET", KEYS[1]) == ARGV[1] and redis.call("TTL", KEYS[1]) == -1 then
+	return redis.call("DEL", KEYS[1])
+end
+return 0
+`
+
+var (
+	releaseFinalizationClaimScript = NewClusterLuaScript(releaseFinalizationClaimLua)
+	cleanupOldIdempotencyKeyScript = NewClusterLuaScript(cleanupOldIdempotencyKeyLua)
+)
 
 func MustRunServiceV2(m statev1.Manager, opts ...MgrV2Opt) state.RunService {
 	o := &mgrV2Opts{}
@@ -105,6 +115,7 @@ func (v v2) Create(ctx context.Context, s state.CreateState) (state.State, error
 		Steps:          s.Steps,
 		StepInputs:     s.StepInputs,
 		RequestVersion: &s.Metadata.Config.RequestVersion,
+		ScheduledAt:    s.Metadata.Config.ScheduledAt,
 	})
 	switch err {
 	case nil:
@@ -232,6 +243,7 @@ func (v v2) Migrate(ctx context.Context, s state.MigrateState) error {
 	pendingKey := fnRunState.kg.Pending(ctx, isSharded, v1id)
 	defersMetaKey := fnRunState.kg.DefersMeta(ctx, isSharded, id.FunctionID, id.RunID)
 	defersInputKey := fnRunState.kg.DefersInput(ctx, isSharded, id.FunctionID, id.RunID)
+	defersControlMetaKey := fnRunState.kg.DefersControlMeta(ctx, isSharded, id.FunctionID, id.RunID)
 
 	eventsBlob, err := json.Marshal(s.Events)
 	if err != nil {
@@ -299,6 +311,8 @@ func (v v2) Migrate(ctx context.Context, s state.MigrateState) error {
 		var metaValues []string
 		var inputHashedIDs []string
 		var inputValues []string
+		var controlHashedIDs []string
+		var controlValues []string
 		for hashedID, d := range s.Defers {
 			metaJSON, err := json.Marshal(deferMeta{
 				FnSlug:         d.FnSlug,
@@ -313,6 +327,10 @@ func (v v2) Migrate(ctx context.Context, s state.MigrateState) error {
 			if len(d.Input) > 0 {
 				inputHashedIDs = append(inputHashedIDs, hashedID)
 				inputValues = append(inputValues, string(d.Input))
+			}
+			if len(d.Meta) > 0 {
+				controlHashedIDs = append(controlHashedIDs, hashedID)
+				controlValues = append(controlValues, string(d.Meta))
 			}
 		}
 		if err := client.Do(ctx, func(c rueidis.Client) rueidis.Completed {
@@ -335,11 +353,26 @@ func (v v2) Migrate(ctx context.Context, s state.MigrateState) error {
 				return fmt.Errorf("redis_state: migrate defers input: %w", err)
 			}
 		}
+		if len(controlHashedIDs) > 0 {
+			if err := client.Do(ctx, func(c rueidis.Client) rueidis.Completed {
+				partial := c.B().Hset().Key(defersControlMetaKey).FieldValue()
+				for i, h := range controlHashedIDs {
+					partial = partial.FieldValue(h, controlValues[i])
+				}
+				return partial.Build()
+			}).Error(); err != nil {
+				return fmt.Errorf("redis_state: migrate defers control meta: %w", err)
+			}
+		}
 	}
 
 	var startedAtMS int64
 	if !cfg.StartedAt.IsZero() {
 		startedAtMS = cfg.StartedAt.UnixMilli()
+	}
+	var scheduledAtMS int64
+	if !cfg.ScheduledAt.IsZero() {
+		scheduledAtMS = cfg.ScheduledAt.UnixMilli()
 	}
 	md := runMetadata{
 		Identifier:                v1id,
@@ -354,6 +387,7 @@ func (v v2) Migrate(ctx context.Context, s state.MigrateState) error {
 		DisableImmediateExecution: cfg.ForceStepPlan,
 		SpanID:                    cfg.SpanID,
 		StartedAt:                 startedAtMS,
+		ScheduledAt:               scheduledAtMS,
 		HasAI:                     cfg.HasAI,
 	}
 
@@ -406,6 +440,30 @@ func (v v2) LookupIdempotency(ctx context.Context, id state.ID, key string) (*st
 	if len(val) > 0 && val[0] == consts.FunctionIdempotencyTombstone {
 		entry.IsTombstone = true
 		val = val[1:]
+		if val == "" {
+			deleted, err := cleanupOldIdempotencyKeyScript.Exec(
+				ctx,
+				client,
+				[]string{redisKey},
+				[]string{string(consts.FunctionIdempotencyTombstone)},
+			).AsInt64()
+			if err != nil {
+				logger.StdlibLogger(ctx).Warn(
+					"failed to clean up old idempotency key",
+					"error", err,
+					"redis_key", redisKey,
+				)
+				return entry, nil
+			}
+			if deleted == 1 {
+				logger.StdlibLogger(ctx).Warn(
+					"deleted old idempotency key with no TTL",
+					"redis_key", redisKey,
+				)
+				return nil, nil
+			}
+			return entry, nil
+		}
 	}
 	runID, err := ulid.Parse(val)
 	if err != nil {
@@ -564,6 +622,10 @@ func (v v2) LoadMetadata(ctx context.Context, id state.ID, _ ...state.LoadMetada
 	if md.StartedAt > 0 {
 		startedAt = time.UnixMilli(md.StartedAt)
 	}
+	var scheduledAt time.Time
+	if md.ScheduledAt > 0 {
+		scheduledAt = time.UnixMilli(md.ScheduledAt)
+	}
 
 	result := state.Metadata{
 		ID: state.ID{
@@ -579,6 +641,7 @@ func (v v2) LoadMetadata(ctx context.Context, id state.ID, _ ...state.LoadMetada
 			FunctionVersion:       md.Identifier.WorkflowVersion,
 			SpanID:                md.SpanID,
 			StartedAt:             startedAt,
+			ScheduledAt:           scheduledAt,
 			EventIDs:              md.Identifier.EventIDs,
 			BatchID:               md.Identifier.BatchID,
 			RequestVersion:        md.RequestVersion,
@@ -665,14 +728,21 @@ func (v v2) SaveStep(ctx context.Context, id state.ID, stepID string, data []byt
 
 	if errors.Is(err, statev1.ErrIdempotentResponse) {
 		// This step data for this step ID has already been saved exactly as before.
-		logger.StdlibLogger(ctx).Warn(
-			"swallowing idempotent step response",
-			"attempt", attempt,
-			"run_id", id.RunID,
-			"step_id", stepID,
-		)
 		// NOTE: hasPending should be accurate in this case.
-		return hasPending, nil
+		if attempt > 1 {
+			// Most likely our own first attempt landed despite the retry, same as
+			// the duplicate case below, so this is a new save.
+			logger.StdlibLogger(ctx).Warn(
+				"swallowing idempotent step response",
+				"attempt", attempt,
+				"run_id", id.RunID,
+				"step_id", util.SanitizeLogField(stepID),
+			)
+			return hasPending, nil
+		}
+		// Return the error so callers can tell an unchanged re-save (eg. an SDK
+		// retrying a checkpoint) from a new one.
+		return hasPending, err
 	}
 
 	if errors.Is(err, statev1.ErrDuplicateResponse) && attempt > 1 {
@@ -685,7 +755,7 @@ func (v v2) SaveStep(ctx context.Context, id state.ID, stepID string, data []byt
 			"swallowing duplicate response",
 			"attempt", attempt,
 			"run_id", id.RunID,
-			"step_id", stepID,
+			"step_id", util.SanitizeLogField(stepID),
 		)
 		return false, nil
 	}

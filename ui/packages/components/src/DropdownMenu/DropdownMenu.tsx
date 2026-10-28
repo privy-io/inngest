@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 
 import { cn } from '../utils/classNames';
+import { menuItemClassName, menuPanelClassName, menuSeparatorClassName } from './menuStyles';
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -33,10 +34,7 @@ export const DropdownMenuContent = forwardRef<
         align={props.align ?? 'start'}
         collisionPadding={8}
         sideOffset={props.sideOffset ?? 8}
-        className={cn(
-          'shadow-primary bg-canvasBase border-muted z-50 min-w-40 rounded-md border p-0.5 [&>*:not(:last-child)]:mb-0.5',
-          props.className
-        )}
+        className={cn(menuPanelClassName, 'z-50 min-w-40', props.className)}
       >
         {children}
       </DropdownMenuPrimitive.Content>
@@ -55,11 +53,25 @@ export const DropdownMenuItem = forwardRef<
       {...props}
       ref={forwardedRef}
       className={cn(
-        'text-muted hover:bg-canvasSubtle flex cursor-pointer select-none flex-row items-center gap-2 rounded-md p-2 text-[0.8125rem]',
+        menuItemClassName,
+        'hover:bg-canvasSubtle data-[highlighted]:bg-canvasSubtle data-[disabled]:text-disabled cursor-pointer data-[disabled]:cursor-not-allowed data-[disabled]:hover:bg-transparent',
         props.className
       )}
     >
       {children}
     </DropdownMenuPrimitive.Item>
+  );
+});
+
+export const DropdownMenuSeparator = forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
+>((props, forwardedRef) => {
+  return (
+    <DropdownMenuPrimitive.Separator
+      {...props}
+      ref={forwardedRef}
+      className={cn(menuSeparatorClassName, props.className)}
+    />
   );
 });

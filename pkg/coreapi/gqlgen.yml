@@ -31,6 +31,8 @@ models:
     fields:
       externalID:
         resolver: true
+      sdkFeatureReadiness:
+        resolver: true
   FunctionVersion:
     model: github.com/inngest/inngest/pkg/function.FunctionVersion
   FunctionRunFinish:
@@ -129,6 +131,8 @@ models:
         resolver: true
   RunTraceSpan:
     model: github.com/inngest/inngest/pkg/coreapi/graph/models.RunTraceSpan
+  RunTraceConcurrencyKey:
+    model: github.com/inngest/inngest/pkg/tracing/meta.CustomConcurrencyKey
   HistoryType:
     model: github.com/inngest/inngest/pkg/enums.HistoryType
   HistoryStepType:

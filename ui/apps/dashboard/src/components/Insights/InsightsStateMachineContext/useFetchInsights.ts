@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { isValidDate } from '@inngest/components/utils/date';
 import { useClient } from 'urql';
 
 import { useEnvironment } from '@/components/Environments/environment-context';
@@ -20,6 +21,7 @@ const insightResultsQuery = graphql(`
       columns {
         name
         columnType
+        role
       }
       rows {
         values
@@ -88,8 +90,10 @@ function parseValueByType(
   switch (columnType) {
     case InsightsColumnType.Number:
       return parseFloat(value);
-    case InsightsColumnType.Date:
-      return new Date(value);
+    case InsightsColumnType.Date: {
+      const date = new Date(value);
+      return isValidDate(date) ? date : value;
+    }
     case InsightsColumnType.String:
     case InsightsColumnType.Unknown:
     default:
@@ -121,6 +125,7 @@ function transformInsightsResponse(
     columns: insights.columns.map((col) => ({
       name: col.name,
       type: mapColumnType(col.columnType),
+      role: col.role,
     })),
     rows: insights.rows.map((row, index) => ({
       id: `row-${index}`,

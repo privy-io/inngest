@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@inngest/components/Button';
 import { Link } from '@inngest/components/Link';
+import { Pill } from '@inngest/components/Pill';
 import {
   Tooltip,
   TooltipContent,
@@ -8,10 +9,9 @@ import {
 } from '@inngest/components/Tooltip';
 import { useOrganization } from '@clerk/tanstack-react-start';
 import { RiAddLine } from '@remixicon/react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, getRouteApi } from '@tanstack/react-router';
 
 import LoadingIcon from '@/components/Icons/LoadingIcon';
-import { APIKeysEmptyState } from '@/components/APIKeys/EmptyState';
 import {
   APIKeysTable,
   type APIKeyRow,
@@ -20,20 +20,25 @@ import { CreateAPIKeyModal } from '@/components/APIKeys/CreateAPIKeyModal';
 import { DeleteAPIKeyModal } from '@/components/APIKeys/DeleteAPIKeyModal';
 import { RenameAPIKeyModal } from '@/components/APIKeys/RenameAPIKeyModal';
 import { useAPIKeys } from '@/components/APIKeys/useAPIKeys';
+import { canManageAPIKeys } from '@/components/APIKeys/permissions';
+import { RestrictedAPIKeys } from '@/components/APIKeys/RestrictedAPIKeys';
 
 export const Route = createFileRoute('/_authed/settings/api-keys/')({
   component: APIKeysPage,
 });
 
 const ADMIN_TOOLTIP = 'Only organization admins can manage API keys.';
+const authedRoute = getRouteApi('/_authed');
 
 function APIKeysPage() {
   const res = useAPIKeys();
-  const { membership, isLoaded: orgLoaded } = useOrganization();
-  const isAdmin = membership?.role === 'org:admin';
+  const { profile } = authedRoute.useLoaderData();
+  const { organization, membership, isLoaded: orgLoaded } = useOrganization();
+  const canManage = canManageAPIKeys({
+    marketplace: profile.marketplace,
+    organizationRole: membership?.role,
+  });
 
-  // Create modal state is owned here so it survives the empty->populated
-  // transition that unmounts the EmptyState.
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<APIKeyRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<APIKeyRow | null>(null);
@@ -41,7 +46,7 @@ function APIKeysPage() {
   if (res.error) {
     throw res.error;
   }
-  if ((res.isLoading && !res.data) || !orgLoaded) {
+  if ((res.isLoading && !res.data) || (!canManage && !orgLoaded)) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <LoadingIcon />
@@ -62,55 +67,65 @@ function APIKeysPage() {
       kind="primary"
       icon={<RiAddLine />}
       iconSide="left"
-      label="Create API key"
+      label="Create legacy key"
       onClick={() => setCreateOpen(true)}
-      disabled={!isAdmin}
+      disabled={!canManage}
     />
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-basis text-2xl">API keys</h1>
-          <p className="text-subtle max-w-2xl text-sm">
-            API keys are shared credentials that allow your applications to
-            authenticate with Inngest. They provide a secure way to connect, run
-            functions, and manage workflows.{' '}
-            <Link
-              href="https://www.inngest.com/docs/platform/api-keys?ref=dashboard-api-keys"
-              className="inline-flex"
-            >
-              Learn more
-            </Link>
+    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-12 px-4 py-12">
+      {canManage ? (
+        <RestrictedAPIKeys key={organization?.id ?? 'marketplace'} />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <h1 className="text-basis text-xl">API keys</h1>
+          <p className="text-subtle text-sm">
+            Only organization admins can view and manage API keys.
           </p>
         </div>
-        {isAdmin ? (
-          createButton
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span tabIndex={0}>{createButton}</span>
-            </TooltipTrigger>
-            <TooltipContent>{ADMIN_TOOLTIP}</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-
-      {keys.length === 0 ? (
-        <APIKeysEmptyState
-          onCreate={() => setCreateOpen(true)}
-          canCreate={isAdmin}
-          disabledTooltip={ADMIN_TOOLTIP}
-        />
-      ) : (
-        <APIKeysTable
-          keys={keys}
-          canManage={isAdmin}
-          onRename={setRenameTarget}
-          onDelete={setDeleteTarget}
-        />
       )}
+      <details className="border-subtle border-t pt-8">
+        <summary className="text-basis cursor-pointer text-sm font-medium">
+          Legacy keys <Pill appearance="outlined">{keys.length}</Pill>
+        </summary>
+        <div className="mt-6 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="text-subtle max-w-2xl text-sm">
+                These keys have no fine-grained permissions.{' '}
+                <Link
+                  href="https://www.inngest.com/docs/platform/api-keys?ref=dashboard-api-keys"
+                  className="inline-flex"
+                >
+                  Learn more
+                </Link>
+              </p>
+            </div>
+            {canManage ? (
+              createButton
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>{createButton}</span>
+                </TooltipTrigger>
+                <TooltipContent>{ADMIN_TOOLTIP}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+
+          {keys.length === 0 ? (
+            <p className="text-subtle text-sm">No legacy API keys.</p>
+          ) : (
+            <APIKeysTable
+              keys={keys}
+              canManage={canManage}
+              onRename={setRenameTarget}
+              onDelete={setDeleteTarget}
+            />
+          )}
+        </div>
+      </details>
 
       <CreateAPIKeyModal
         isOpen={createOpen}

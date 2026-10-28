@@ -1,3 +1,5 @@
+import { defaultStringifySearch } from '@tanstack/react-router';
+
 export const WEBSITE_PRICING_URL = 'https://www.inngest.com/pricing';
 export const WEBSITE_CONTACT_URL = 'https://www.inngest.com/contact';
 export const DISCORD_URL = 'https://www.inngest.com/discord';
@@ -29,10 +31,15 @@ export function setSkipCacheSearchParam(url: string): string {
  * option. Splat routes (e.g. Clerk's /sign-in/factor-one) should pass their
  * base path so all sub-paths collapse to one canonical URL.
  */
+/** Resolves an app-relative path to an absolute URL. */
+export function absoluteUrl(path: string) {
+  return new URL(path, import.meta.env.VITE_APP_URL).toString();
+}
+
 export function canonicalLink(path: string) {
   return {
     rel: 'canonical',
-    href: new URL(path, import.meta.env.VITE_APP_URL).toString(),
+    href: absoluteUrl(path),
   };
 }
 
@@ -50,8 +57,17 @@ export const pathCreator = {
   dashboard({ envSlug }: { envSlug: string }) {
     return `/env/${envSlug}/`;
   },
+  aiOverview({ envSlug }: { envSlug: string }) {
+    return `/env/${envSlug}/ai-overview`;
+  },
   apps({ envSlug }: { envSlug: string }) {
     return `/env/${envSlug}/apps`;
+  },
+  sandboxes({ envSlug }: { envSlug: string }) {
+    return `/env/${envSlug}/sandboxes`;
+  },
+  sandbox({ envSlug, sandboxID }: { envSlug: string; sandboxID: string }) {
+    return `/env/${envSlug}/sandboxes/${sandboxID}`;
   },
   app({ envSlug, externalAppID }: { envSlug: string; externalAppID: string }) {
     return `/env/${envSlug}/apps/${encodeURIComponent(externalAppID)}`;
@@ -95,9 +111,13 @@ export const pathCreator = {
   billingUsage({
     dimension,
     previous,
+    ref,
+    hash,
   }: {
     dimension?: string;
     previous?: boolean;
+    ref?: string;
+    hash?: string;
   } = {}) {
     let path = '/billing/usage';
     const query = new URLSearchParams();
@@ -107,8 +127,14 @@ export const pathCreator = {
     if (previous) {
       query.set('previous', previous.toString());
     }
+    if (ref) {
+      query.set('ref', ref);
+    }
     if (query.toString()) {
       path += `?${query.toString()}`;
+    }
+    if (hash) {
+      path += `#${hash}`;
     }
     return path;
   },
@@ -138,8 +164,34 @@ export const pathCreator = {
   envs() {
     return '/env';
   },
-  functions({ envSlug }: { envSlug: string }) {
-    return `/env/${envSlug}/functions`;
+  functions({
+    envSlug,
+    appIDs,
+    archived,
+  }: {
+    envSlug: string;
+    appIDs?: string[];
+    archived?: boolean;
+  }) {
+    const path = `/env/${envSlug}/functions`;
+    const search: Record<string, string> = {};
+    if (appIDs?.length) {
+      // The functions table reads its app filter from a JSON-encoded array of
+      // app IDs, matching `useStringArraySearchParam('filterApp')`.
+      search.filterApp = JSON.stringify(appIDs);
+    }
+    // The table defaults to active functions, so archived functions are only
+    // visible when the status filter is explicitly set.
+    if (archived) {
+      search.archived = 'true';
+    }
+
+    // Both filters read their params as strings. The router's serializer
+    // double-encodes JSON-looking strings so they survive parsing as strings,
+    // so build the query with it rather than by hand: URLSearchParams would
+    // emit `filterApp=["id"]`, which the router parses into an array and the
+    // filter hooks then discard.
+    return `${path}${defaultStringifySearch(search)}`;
   },
   function({
     envSlug,
@@ -208,6 +260,9 @@ export const pathCreator = {
   },
   integrations() {
     return `/settings/integrations`;
+  },
+  metrics({ envSlug, ref }: { envSlug: string; ref?: string }) {
+    return `/env/${envSlug}/metrics${ref ? `?ref=${ref}` : ''}`;
   },
   keys({ envSlug }: { envSlug: string }) {
     return `/env/${envSlug}/manage/keys`;
