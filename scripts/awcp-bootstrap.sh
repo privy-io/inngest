@@ -1,8 +1,10 @@
 #!/bin/sh
-# Fetch Postgres/Redis/event/signing-key values from the AWCP sidecar and
-# assemble INNGEST_POSTGRES_URI / INNGEST_REDIS_URI before exec'ing the real
-# server. Values never pass through a persistent k8s Secret; AWCP serves them
-# fresh over loopback on each pod start (see apps/inngest in privy-io/kubernetes).
+# Fetch Postgres/Redis passwords and event/signing keys from the AWCP sidecar
+# and assemble INNGEST_POSTGRES_URI / INNGEST_REDIS_URI before exec'ing the
+# real server. Hostnames and the Postgres username are not secrets, so they
+# come from env vars instead of AWCP. Secret values never pass through a
+# persistent k8s Secret; AWCP serves them fresh over loopback on each pod
+# start (see apps/inngest in privy-io/kubernetes).
 set -eu
 
 : "${AWS_REGION:?AWS_REGION must be set}"
@@ -10,6 +12,8 @@ set -eu
 : "${AWCP_READER_ROLE_ARN:?AWCP_READER_ROLE_ARN must be set}"
 : "${AWCP_SECRET_PREFIX:?AWCP_SECRET_PREFIX must be set}" # e.g. stage/inngest/
 : "${INNGEST_POSTGRES_HOST:?INNGEST_POSTGRES_HOST must be set}"
+: "${INNGEST_POSTGRES_USERNAME:?INNGEST_POSTGRES_USERNAME must be set}"
+: "${INNGEST_REDIS_HOST:?INNGEST_REDIS_HOST must be set}"
 
 awcp_endpoint="${AWCP_ENDPOINT:-http://127.0.0.1:2773}"
 awcp_token_file="${AWCP_TOKEN_FILE:-/var/run/awcp/token}"
@@ -38,22 +42,20 @@ fetch_secret() {
     }
 }
 
-postgres_username="$(fetch_secret postgres-username)"
 postgres_password="$(fetch_secret postgres-password)"
 redis_password="$(fetch_secret redis-password)"
-redis_host="$(fetch_secret redis-host)"
 event_key="$(fetch_secret event-key)"
 signing_key="$(fetch_secret signing-key)"
 
-postgres_uri_user="$(urlencode "$postgres_username")"
+postgres_uri_user="$(urlencode "$INNGEST_POSTGRES_USERNAME")"
 postgres_uri_pass="$(urlencode "$postgres_password")"
 redis_uri_pass="$(urlencode "$redis_password")"
 
 export INNGEST_EVENT_KEY="$event_key"
 export INNGEST_SIGNING_KEY="$signing_key"
 export INNGEST_POSTGRES_URI="postgres://${postgres_uri_user}:${postgres_uri_pass}@${INNGEST_POSTGRES_HOST}:${postgres_port}/${postgres_db}?sslmode=require"
-export INNGEST_REDIS_URI="rediss://:${redis_uri_pass}@${redis_host}:${redis_port}"
+export INNGEST_REDIS_URI="rediss://:${redis_uri_pass}@${INNGEST_REDIS_HOST}:${redis_port}"
 
-echo "awcp-bootstrap: loaded 6 secrets, starting inngest" >&2
+echo "awcp-bootstrap: loaded 4 secrets, starting inngest" >&2
 
 exec /bin/inngest "$@"
