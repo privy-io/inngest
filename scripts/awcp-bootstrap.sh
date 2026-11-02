@@ -42,10 +42,10 @@ fetch_secret() {
     }
 }
 
-postgres_password="$(fetch_secret postgres-password)"
-redis_password="$(fetch_secret redis-password)"
-event_key="$(fetch_secret event-key)"
-signing_key="$(fetch_secret signing-key)"
+postgres_password="$(fetch_secret SELF_HOSTED_INNGEST_DB_PASSWORD)"
+redis_password="$(fetch_secret SELF_HOSTED_INNGEST_REDIS_PASSWORD)"
+event_key="$(fetch_secret SELF_HOSTED_INNGEST_EVENT_KEY)"
+signing_key="$(fetch_secret SELF_HOSTED_INNGEST_SIGNING_KEY)"
 
 postgres_uri_user="$(urlencode "$INNGEST_POSTGRES_USERNAME")"
 postgres_uri_pass="$(urlencode "$postgres_password")"
