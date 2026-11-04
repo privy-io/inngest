@@ -19,6 +19,10 @@ import (
 )
 
 func action(ctx context.Context, cmd *cli.Command) error {
+	return actionWithStart(ctx, cmd, devserver.New)
+}
+
+func actionWithStart(ctx context.Context, cmd *cli.Command, startServer func(context.Context, devserver.StartOpts) error) error {
 	// TODO Likely need a `Start()`
 	conf, err := config.Dev(ctx)
 	if err != nil {
@@ -132,6 +136,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		EnableDuckDB:            localconfig.GetBoolValue(cmd, "duckdb", false),
 		EnableDuckDBReads:       localconfig.GetBoolValue(cmd, "duckdb-reads", false),
 		Persist:                 true,
+		Poll:                    true,
 		PollInterval:            localconfig.GetIntValue(cmd, "poll-interval", devserver.DefaultPollInterval),
 		PostgresConnMaxIdleTime: localconfig.GetIntValue(cmd, "postgres-conn-max-idle-time", 5),
 		PostgresConnMaxLifetime: localconfig.GetIntValue(cmd, "postgres-conn-max-lifetime", 30),
@@ -153,7 +158,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 		),
 	}
 
-	err = devserver.New(ctx, opts)
+	err = startServer(ctx, opts)
 	if err != nil {
 		return err
 	}

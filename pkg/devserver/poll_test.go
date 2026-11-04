@@ -94,3 +94,40 @@ func TestPollSDKs_FirstSyncPingsOnceUnderNoPoll(t *testing.T) {
 	require.Equal(t, int32(1), hits.Load(),
 		"an app with no error must not be pinged again under --no-poll once its first sync has landed")
 }
+
+func TestPollSDKs_PollsHealthyApp(t *testing.T) {
+	var hits atomic.Int32
+
+	ds := newTestDevServer(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	url := util.NormalizeAppURL(srv.URL, false)
+	_, err := ds.Data.UpsertApp(context.Background(), cqrs.UpsertAppParams{
+		ID:  inngest.DeterministicAppUUID(url),
+		Url: url,
+	})
+	require.NoError(t, err)
+
+	ds.Opts = StartOpts{
+		Poll:         true,
+		PollInterval: 0, // tight loop so several iterations run during the test
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	defer func() {
+		cancel()
+		<-done
+	}()
+	go func() {
+		ds.pollSDKs(ctx)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool { return hits.Load() >= 3 }, 2*time.Second, 10*time.Millisecond,
+		"a healthy app must be pinged on subsequent polling iterations")
+}
