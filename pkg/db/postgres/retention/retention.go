@@ -86,6 +86,8 @@ func Run(ctx context.Context, db *sql.DB, cfg Config) ([]Result, error) {
 	for _, s := range steps {
 		if cfg.DryRun {
 			var n int64
+			// countSQL only joins package constants. The interval is bound as $1, never interpolated.
+			// nosemgrep: go.lang.security.audit.sqli.gosql-sqli.gosql-sqli
 			if err := db.QueryRowContext(ctx, countSQL(s), interval).Scan(&n); err != nil {
 				return results, fmt.Errorf("counting %s: %w", s.table, err)
 			}
