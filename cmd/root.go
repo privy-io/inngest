@@ -9,6 +9,7 @@ import (
 
 	"github.com/inngest/inngest/cmd/apiv2cli"
 	authcmd "github.com/inngest/inngest/cmd/auth"
+	"github.com/inngest/inngest/cmd/cleanup"
 	"github.com/inngest/inngest/cmd/devserver"
 	"github.com/inngest/inngest/cmd/duckdb"
 	"github.com/inngest/inngest/cmd/start"
@@ -101,6 +102,7 @@ func execute() {
 			authcmd.LogoutCommand(),
 			authcmd.AuthCommand(),
 			apiv2cli.Command(),
+			cleanup.Command(),
 			devserver.Command(),
 			duckdb.Command(),
 			version.Command(),

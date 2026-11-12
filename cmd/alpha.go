@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/inngest/inngest/cmd/apiv2cli"
-	"github.com/inngest/inngest/cmd/cleanup"
 	"github.com/inngest/inngest/cmd/conformance"
 	"github.com/inngest/inngest/cmd/debug"
 	"github.com/inngest/inngest/cmd/doctor"
@@ -16,7 +15,6 @@ func alpha() *cli.Command {
 		Usage:  "experimental CLI commands",
 		Commands: []*cli.Command{
 			apiv2cli.MovedCommand(),
-			cleanup.Command(),
 			conformance.Command(),
 			debug.Command(),
 			doctor.Command(),
