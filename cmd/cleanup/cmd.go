@@ -13,17 +13,14 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const dryRunPrefix = "dry-run:"
-
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "cleanup",
 		Usage: "Delete finished run history from the self-hosted Postgres database",
 		Description: "Deletes runs that ended more than --retention ago, along with their " +
 			"spans, traces, history, and unreferenced events. Runs that have not ended are never " +
-			"deleted. --retention takes a duration such as 30d or 720h. Prefix it with dry-run: " +
-			"to only report what would be deleted, e.g. --retention=dry-run:7d. " +
-			"See docs/POSTGRES_RETENTION.md.",
+			"deleted. --retention takes a duration such as 30d or 720h. Pass --dry-run to only " +
+			"report what would be deleted. See docs/POSTGRES_RETENTION.md.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "postgres-uri",
@@ -33,7 +30,7 @@ func Command() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "retention",
-				Usage: "Keep finished history for this long, e.g. 30d or 720h. Prefix with dry-run: to report without deleting",
+				Usage: "Keep finished history for this long, e.g. 30d or 720h",
 				Value: "30d",
 			},
 			&cli.IntFlag{
@@ -41,13 +38,17 @@ func Command() *cli.Command {
 				Usage: "Maximum rows removed by each DELETE statement",
 				Value: 10000,
 			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "Report what would be deleted without deleting anything",
+			},
 		},
 		Action: run,
 	}
 }
 
 func run(ctx context.Context, cmd *cli.Command) error {
-	window, dryRun, err := parseRetention(cmd.String("retention"))
+	window, err := parseRetention(cmd.String("retention"))
 	if err != nil {
 		return err
 	}
@@ -62,6 +63,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("connecting to postgres: %w", err)
 	}
 
+	dryRun := cmd.Bool("dry-run")
 	results, err := retention.Run(ctx, db, retention.Config{
 		Retention: window,
 		BatchSize: int(cmd.Int("batch-size")),
@@ -81,26 +83,19 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// parseRetention reads the --retention value: an optional dry-run: prefix
-// followed by a duration. Without the prefix, the command deletes.
-func parseRetention(v string) (time.Duration, bool, error) {
-	dryRun := false
-	if rest, ok := strings.CutPrefix(v, dryRunPrefix); ok {
-		dryRun = true
-		v = rest
-	}
-
+// parseRetention accepts whole days (30d) as well as Go durations (720h).
+func parseRetention(v string) (time.Duration, error) {
 	if days, ok := strings.CutSuffix(v, "d"); ok {
 		n, err := strconv.Atoi(days)
 		if err != nil {
-			return 0, false, fmt.Errorf("invalid --retention %q: %w", v, err)
+			return 0, fmt.Errorf("invalid --retention %q: %w", v, err)
 		}
-		return time.Duration(n) * 24 * time.Hour, dryRun, nil
+		return time.Duration(n) * 24 * time.Hour, nil
 	}
 
 	d, err := time.ParseDuration(v)
 	if err != nil {
-		return 0, false, fmt.Errorf("invalid --retention %q: %w", v, err)
+		return 0, fmt.Errorf("invalid --retention %q: %w", v, err)
 	}
-	return d, dryRun, nil
+	return d, nil
 }
