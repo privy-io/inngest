@@ -376,6 +376,12 @@ CREATE UNIQUE INDEX apps_name_unique_key ON public.apps USING btree (name) WHERE
 CREATE UNIQUE INDEX functions_app_id_slug_active_key ON public.functions USING btree (app_id, slug) WHERE (archived_at IS NULL);
 
 --
+-- Name: idx_event_batches_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_event_batches_run_id ON public.event_batches USING btree (run_id);
+
+--
 -- Name: idx_events_internal_id; Type: INDEX; Schema: public; Owner: -
 --
 
