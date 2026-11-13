@@ -16,9 +16,11 @@ import (
 const terminalStatuses = "50, 300, 400, 500, 600"
 
 // expiredTraceRuns selects ended trace runs older than $1. It gates the trace
-// tables.
+// tables. ended_at > 0 keeps a terminal run whose end time was never written
+// (zero or negative), since it has no age to compare against.
 const expiredTraceRuns = `SELECT run_id FROM trace_runs
 	WHERE status IN (` + terminalStatuses + `)
+	AND ended_at > 0
 	AND ended_at < (extract(epoch FROM now() - $1::interval) * 1000)::bigint`
 
 // expiredFunctionRuns selects runs that finished more than $1 ago. A row in
@@ -57,7 +59,7 @@ var steps = []step{
 	{table: "spans", where: `run_id IN (` + expiredTraceRuns + `)`},
 	{table: "traces", where: `run_id IN (` + expiredTraceRuns + `)`},
 	{table: "event_batches", where: `run_id IN (` + expiredTraceRuns + `)`},
-	{table: "trace_runs", where: `status IN (` + terminalStatuses + `) AND ended_at < (extract(epoch FROM now() - $1::interval) * 1000)::bigint`},
+	{table: "trace_runs", where: `status IN (` + terminalStatuses + `) AND ended_at > 0 AND ended_at < (extract(epoch FROM now() - $1::interval) * 1000)::bigint`},
 	{table: "history", where: `run_id IN (` + expiredFunctionRuns + `)`},
 	{table: "function_runs", where: `run_id IN (` + expiredFunctionRuns + `)`},
 	{table: "function_finishes", where: `created_at < now() - $1::interval`},
