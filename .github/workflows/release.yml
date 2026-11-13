@@ -7,6 +7,8 @@ on:
 
 jobs:
   check-release-type:
+    # Releases are pushed to ECR by a manual script; Depot runners are not available here.
+    if: false
     runs-on: depot-ubuntu-22.04
     outputs:
       prerelease: ${{ steps.check.outputs.prerelease }}
@@ -18,6 +20,8 @@ jobs:
           echo "prerelease=$prerelease" >> $GITHUB_OUTPUT
 
   goreleaser:
+    # Releases are pushed to ECR by a manual script; Depot runners are not available here.
+    if: false
     runs-on: depot-ubuntu-22.04-4
     needs: [check-release-type]
     steps:
@@ -165,6 +169,8 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
   linear-release:
+    # Releases are pushed to ECR by a manual script; Depot runners are not available here.
+    if: false
     runs-on: depot-ubuntu-22.04
     permissions:
       contents: read

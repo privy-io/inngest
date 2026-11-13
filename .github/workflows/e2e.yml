@@ -18,6 +18,8 @@ env:
 
 jobs:
   ts:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "TS SDK / OS: (${{ matrix.os }}), key-queues: ${{ matrix.experimentalKeyQueues }}"
     strategy:
       fail-fast: false
@@ -115,6 +117,8 @@ jobs:
   # refs:
   #  - https://go.dev/doc/build-cover
   golang:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "Go SDK / OS: (${{ matrix.os }}), key-queues: ${{ matrix.experimentalKeyQueues }}, db: ${{ matrix.database }} / split: ${{ matrix.index }}"
     strategy:
       fail-fast: false
@@ -216,6 +220,8 @@ jobs:
           report_type: test_results
 
   batch:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "Batch / OS: (${{ matrix.os }}), key-queues: ${{ matrix.experimentalKeyQueues }}, db: ${{ matrix.database }}, split-batch-partition: ${{ matrix.splitBatchPartition }}"
     strategy:
       fail-fast: false
@@ -315,6 +321,8 @@ jobs:
           report_type: test_results
 
   api:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "API / OS: (${{ matrix.os }}), key-queues: ${{ matrix.experimentalKeyQueues }}, db: ${{ matrix.database }}"
     strategy:
       fail-fast: false
@@ -412,6 +420,8 @@ jobs:
           report_type: test_results
 
   execution:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "Execution / OS: (${{ matrix.os }}), key-queues: ${{ matrix.experimentalKeyQueues }}"
     strategy:
       fail-fast: false

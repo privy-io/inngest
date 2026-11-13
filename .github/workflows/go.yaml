@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   golangci:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: Lint
     strategy:
       matrix:
@@ -56,6 +58,8 @@ jobs:
   # the real stack ever executing. This job installs the pinned binary and
   # fails if any required smoke test skips.
   duckdb-smoke:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     name: "Test / DuckDB smoke (pinned binary, no skips)"
     runs-on: depot-ubuntu-22.04-4
     steps:
@@ -85,6 +89,8 @@ jobs:
         run: scripts/duckdb-smoke.sh -race
 
   test-linux-race:
+    # Depot runners are not available here; disabled until they are.
+    if: false
     strategy:
       fail-fast: false
       matrix:
