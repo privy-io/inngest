@@ -16,7 +16,8 @@ concurrency:
 
 jobs:
   prerelease:
-    if: github.event.issue.pull_request != null
+    # Releases are pushed to ECR by a manual script; release workflows are disabled here.
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout workflow scripts

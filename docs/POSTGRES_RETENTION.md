@@ -88,6 +88,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_function_finishes_created_at
   ON function_finishes (created_at);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_traces_run_id
   ON traces (run_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_event_batches_run_id
+  ON event_batches (run_id);
 ```
 
 `spans (run_id)` and `history (run_id, created_at)` already exist.

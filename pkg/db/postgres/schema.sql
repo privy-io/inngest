@@ -376,6 +376,12 @@ CREATE UNIQUE INDEX apps_name_unique_key ON public.apps USING btree (name) WHERE
 CREATE UNIQUE INDEX functions_app_id_slug_active_key ON public.functions USING btree (app_id, slug) WHERE (archived_at IS NULL);
 
 --
+-- Name: idx_event_batches_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_event_batches_run_id ON public.event_batches USING btree (run_id);
+
+--
 -- Name: idx_events_internal_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -392,6 +398,12 @@ CREATE INDEX idx_events_internal_id_received_range ON public.events USING btree 
 --
 
 CREATE INDEX idx_events_received_name ON public.events USING btree (received_at, event_name);
+
+--
+-- Name: idx_function_finishes_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_function_finishes_created_at ON public.function_finishes USING btree (created_at);
 
 --
 -- Name: idx_function_finishes_run_id; Type: INDEX; Schema: public; Owner: -
@@ -518,6 +530,18 @@ CREATE INDEX idx_trace_runs_acct_ws_queued ON public.trace_runs USING btree (acc
 --
 
 CREATE INDEX idx_trace_runs_acct_ws_started ON public.trace_runs USING btree (account_id, workspace_id, started_at DESC, run_id);
+
+--
+-- Name: idx_trace_runs_status_ended_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_trace_runs_status_ended_at ON public.trace_runs USING btree (status, ended_at);
+
+--
+-- Name: idx_traces_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_traces_run_id ON public.traces USING btree (run_id);
 
 --
 -- Name: idx_traces_trace_id; Type: INDEX; Schema: public; Owner: -
