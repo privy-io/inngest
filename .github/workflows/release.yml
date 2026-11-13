@@ -122,6 +122,8 @@ jobs:
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
   npm:
+    # Releases are pushed to ECR by a manual script; release workflows are disabled here.
+    if: false
     runs-on: ubuntu-22.04
     needs: [goreleaser, check-release-type]
     permissions:
@@ -158,7 +160,8 @@ jobs:
           fi
 
   api-docs:
-    if: needs.check-release-type.outputs.prerelease == ''
+    # Releases are pushed to ECR by a manual script; release workflows are disabled here.
+    if: false
     needs: [check-release-type, goreleaser, npm]
     permissions:
       contents: read
