@@ -229,6 +229,14 @@ func start(ctx context.Context, opts StartOpts) error {
 
 	var err error
 
+	// Route OTel instruments (queue latency, executor phases) to /metrics before
+	// any of them are recorded, otherwise they go to a no-op provider.
+	shutdownOTelMeter, err := metrics.SetupOTelMeter(ctx)
+	if err != nil {
+		return err
+	}
+	defer shutdownOTelMeter()
+
 	// Initialize the devserver
 	var adapter interface {
 		dbpkg.Adapter
