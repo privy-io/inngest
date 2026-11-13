@@ -10,6 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
+	"go.opentelemetry.io/otel"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 const (
@@ -117,6 +120,24 @@ var queueDepthGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 
 func init() {
 	registry.MustRegister(queueDepthGauge)
+}
+
+// SetupOTelMeter installs an OTel meter provider whose instruments are exposed
+// on the same registry served by MetricsAPI. Without this, OTel instruments
+// such as queue_item_latency_duration are recorded against a no-op provider and
+// never reach /metrics.
+func SetupOTelMeter(ctx context.Context) (func(), error) {
+	exp, err := otelprom.New(otelprom.WithRegisterer(registry))
+	if err != nil {
+		return nil, fmt.Errorf("error setting up otel prometheus exporter: %w", err)
+	}
+
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exp))
+	otel.SetMeterProvider(mp)
+
+	return func() {
+		_ = mp.Shutdown(ctx)
+	}, nil
 }
 
 // MetricsAPI provides Prometheus-compatible metrics endpoints
