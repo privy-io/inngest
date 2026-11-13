@@ -65,6 +65,7 @@ require (
 	github.com/pquerna/cachecontrol v0.2.0
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/client_model v0.5.0
 	github.com/prometheus/common v0.45.0
 	github.com/redis/rueidis v1.0.68
 	github.com/robfig/cron/v3 v3.0.1
@@ -245,7 +246,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.25 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20201118171849-f6a6b3f636fc // indirect
 	github.com/redis/rueidis/rueidiscompat v1.0.68 // indirect
