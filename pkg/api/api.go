@@ -74,6 +74,9 @@ func NewAPI(o Options) (chi.Router, error) {
 	})
 	api.Use(cors.Handler)
 	api.Use(headers.StaticHeadersMiddleware(o.Config.GetServerKind()))
+	// Records http_api_requests_total and http_api_duration_milliseconds for
+	// every mounted route, including /v1 and /v0.
+	api.Use(NewMetricsMiddleware().Middleware)
 
 	api.Get(HealthPath, api.HealthCheck)
 	api.Post("/e/{key}", api.ReceiveEvent)
