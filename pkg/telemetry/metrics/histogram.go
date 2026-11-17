@@ -378,6 +378,17 @@ func HistogramHTTPAPIDuration(ctx context.Context, dur int64, opts HistogramOpt)
 	})
 }
 
+func HistogramHTTPAPIBytesWritten(ctx context.Context, bytes int64, opts HistogramOpt) {
+	RecordIntHistogramMetric(ctx, bytes, HistogramOpt{
+		PkgName:     opts.PkgName,
+		MetricName:  "http_api_bytes_written",
+		Description: "API response size in bytes",
+		Tags:        opts.Tags,
+		Unit:        "bytes",
+		Boundaries:  DefaultBoundaries,
+	})
+}
+
 func HistogramPauseBlockFlushLatency(ctx context.Context, delay time.Duration, opts HistogramOpt) {
 	RecordIntHistogramMetric(ctx, delay.Milliseconds(), HistogramOpt{
 		PkgName:     opts.PkgName,

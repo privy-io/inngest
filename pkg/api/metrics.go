@@ -43,5 +43,10 @@ func (m metricsMiddleware) Middleware(next http.Handler) http.Handler {
 			PkgName: metricsPkgName,
 			Tags:    tags,
 		})
+
+		metrics.HistogramHTTPAPIBytesWritten(ctx, m.Written, metrics.HistogramOpt{
+			PkgName: metricsPkgName,
+			Tags:    tags,
+		})
 	})
 }
